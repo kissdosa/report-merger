@@ -179,13 +179,13 @@ class ModernOptionMenu(ctk.CTkOptionMenu):
                 fill="#4E5968", width=2, capstyle="round",
                 tags="custom_arrow"
             )
-            # 2. 좌측 날개 (독립 선분 렌더링)
+            # 2. 좌측 날개 (독립 대칭 선분)
             self._canvas.create_line(
                 cx - 4, cy, cx, cy + 4,
                 fill="#4E5968", width=2, capstyle="round",
                 tags="custom_arrow"
             )
-            # 3. 우측 날개 (좌측과 완벽 대칭)
+            # 3. 우측 날개 (좌측과 완벽한 정수 대칭)
             self._canvas.create_line(
                 cx + 4, cy, cx, cy + 4,
                 fill="#4E5968", width=2, capstyle="round",
@@ -699,8 +699,9 @@ class ReportMergerApp(ctk.CTk):
 
         self.title("엑셀 문서 자동 취합 프로그램")
 
-        self.geometry("540 x 830")
-        self.minsize(480, 720)
+        # 텍스트 깨짐 방지: 기본 너비 560, 최소 너비 540 고정 (최대 너비는 제한 없음)
+        self.geometry("560 x 830")
+        self.minsize(540, 720)
         self.resizable(True, True)
         self.configure(fg_color="#F2F4F6")
 
@@ -716,6 +717,9 @@ class ReportMergerApp(ctk.CTk):
 
         self._init_ui()
         self._setup_drag_and_drop()
+
+        # 창 크기 변경 감지 바인딩 (면책 문구 반응형 줄바꿈)
+        self.bind("<Configure>", self._on_window_resize)
 
     def _init_ui(self):
         # 1. 상단 타이틀 카드
@@ -809,12 +813,12 @@ class ReportMergerApp(ctk.CTk):
         )
         self.file_listbox.pack(fill="both", expand=True, padx=20, pady=(0, 10))
 
-        # [신규] 박스 정중앙 드래그 앤 드롭 안내 문구 라벨
-        placeholder_text = "위의 추가 버튼을 클릭하거나, 취합할 파일을 이곳으로 드래그 앤 드롭해 주세요.."
+        # 박스 정중앙 안내 문구 (마침표 1개로 정돈 및 9pt 최적화)
+        placeholder_text = "위의 추가 버튼을 클릭하거나, 취합할 파일을 이곳으로 드래그 앤 드롭해 주세요."
         self.placeholder_label = tk.Label(
             self.file_listbox,
             text=placeholder_text,
-            font=(APP_FONT, 10),
+            font=(APP_FONT, 9),
             fg="#8B95A1",
             bg="#F9FAFB",
             cursor="hand2"
@@ -1032,7 +1036,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.run_btn.pack(fill="x", padx=16, pady=(0, 10))
 
-        # 4. 맨 하단 면책 문구 (요청 문구로 교체 및 최적 줄바꿈)
+        # 4. 맨 하단 면책 문구 (반응형 동적 줄바꿈)
         disclaimer_text = (
             "본 프로그램은 업무 지원을 목적으로 제공되는 도구입니다. "
             "사용자는 본 프로그램을 자유롭게 수정·사용·배포할 수 있으며, "
@@ -1043,10 +1047,17 @@ class ReportMergerApp(ctk.CTk):
             text=disclaimer_text,
             font=ctk.CTkFont(family=APP_FONT, size=10),
             text_color="#8B95A1",
-            justify="center",
-            wraplength=490
+            justify="center"
         )
-        self.disclaimer_label.pack(padx=16, pady=(0, 14))
+        self.disclaimer_label.pack(fill="x", padx=16, pady=(0, 14))
+
+    def _on_window_resize(self, event):
+        """창 크기 조절 시 맨 하단 면책 문구의 너비를 반응형으로 실시간 계산"""
+        if event.widget == self:
+            current_w = self.winfo_width()
+            # 창 양쪽 마진(32px)을 제외한 가용 너비로 실시간 줄바꿈
+            new_wraplength = max(320, current_w - 40)
+            self.disclaimer_label.configure(wraplength=new_wraplength)
 
     def _extract_sample_columns(self):
         """추가된 문서들에서 컬럼 헤더 목록을 안전하게 분석하여 캐싱"""
@@ -1108,7 +1119,7 @@ class ReportMergerApp(ctk.CTk):
         AboutDialog(self, APP_FONT)
 
     def _setup_drag_and_drop(self):
-        """Tkinter 메인 루프 충돌 방지 안전한 드래그 앤 드롭 (박스 및 안내 텍스트 모두 바인딩)"""
+        """Tkinter 메인 루프 충돌 방지 안전한 드래그 앤 드롭"""
         try:
             import windnd
 
@@ -1168,7 +1179,6 @@ class ReportMergerApp(ctk.CTk):
     def _refresh_listbox(self):
         self.file_listbox.delete(0, tk.END)
 
-        # 파일 유무에 따라 박스 중앙 안내 문구 표시/숨김
         if not self.selected_files:
             self.placeholder_label.place(relx=0.5, rely=0.5, anchor="center")
         else:
