@@ -28,9 +28,10 @@ jobs:
         python -c "
         from PIL import Image, ImageDraw, ImageFont
         w, h = 400, 170
-        img = Image.new('RGB', (w, h), (255, 255, 255))
+        # PyInstaller 투명 크로마키(Magenta) 적용으로 모서리 라운딩 구현
+        img = Image.new('RGB', (w, h), (255, 0, 255))
         draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle([0, 0, w-1, h-1], radius=16, outline=(229, 232, 235), width=2)
+        draw.rounded_rectangle([2, 2, w-3, h-3], radius=16, fill=(255, 255, 255), outline=(229, 232, 235), width=2)
         try:
             f_title = ImageFont.truetype('NanumGothicBold.ttf', 17)
             f_status = ImageFont.truetype('NanumGothicBold.ttf', 14)
