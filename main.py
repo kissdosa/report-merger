@@ -19,7 +19,7 @@ import threading
 from pathlib import Path
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 import customtkinter as ctk
 import pandas as pd
 import pyzipper
@@ -66,93 +66,85 @@ def excel_col_to_index(col_str):
 
 
 # ==========================================
-# 3. 버튼용 벡터 라인 아이콘 생성기 (Pillow)
+# 3. 버튼용 벡터 라인 아이콘 생성기 (타이트 크롭)
 # ==========================================
-def create_reload_icon(size=(14, 14), color="#4E5968"):
-    """첫 번째 이미지 양식: 미니멀 원형 회전 화살표 아이콘"""
+def create_reload_icon(size=(13, 13), color="#4E5968"):
+    """미니멀 회전 화살표 아이콘 (여백 타이트 크롭)"""
     scale = 4
     s = size[0] * scale
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    w = int(1.7 * scale)
-    m = int(2.4 * scale)
+    w = int(1.8 * scale)
 
-    # 원형 호 (Arc: 15도 ~ 300도 회전)
-    draw.arc([m, m, s - m, s - m], start=15, end=300, fill=color, width=w)
+    draw.arc([1 * scale, 1 * scale, s - 1 * scale, s - 1 * scale], start=20, end=305, fill=color, width=w)
+    tip_x = s - 1 * scale
+    tip_y = int(4 * scale)
+    barb = int(3.5 * scale)
+    draw.line([(tip_x - barb, tip_y - int(1 * scale)), (tip_x, tip_y)], fill=color, width=w)
+    draw.line([(tip_x - int(1 * scale), tip_y + barb), (tip_x, tip_y)], fill=color, width=w)
 
-    # 상단 우측 화살표 머리 (오른쪽/아래를 향하는 꺾쇠)
-    tip_x = s - m
-    tip_y = int(4.5 * scale)
-    barb = int(3.2 * scale)
-    draw.line([(tip_x - barb, tip_y - int(1.2 * scale)), (tip_x, tip_y)], fill=color, width=w)
-    draw.line([(tip_x - int(1.2 * scale), tip_y + barb), (tip_x, tip_y)], fill=color, width=w)
-
-    res = img.resize(size, Image.Resampling.LANCZOS)
+    bbox = img.getbbox()
+    cropped = img.crop(bbox) if bbox else img
+    res = cropped.resize(size, Image.Resampling.LANCZOS)
     return ctk.CTkImage(light_image=res, dark_image=res, size=size)
 
 
-def create_folder_icon(size=(14, 14), color="#333D4B"):
-    """두 번째 이미지 양식: 미니멀 오픈 폴더 라인 아이콘"""
+def create_folder_icon(size=(13, 13), color="#333D4B"):
+    """미니멀 오픈 폴더 아이콘 (여백 타이트 크롭)"""
     scale = 4
     s = size[0] * scale
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    w = int(1.7 * scale)
+    w = int(1.8 * scale)
 
-    # 1. 뒷면 폴더 외곽선 (우측 영역)
-    back_rect = [int(4.8 * scale), int(2.5 * scale), int(12.5 * scale), int(12.5 * scale)]
-    draw.rounded_rectangle(back_rect, radius=int(2.2 * scale), outline=color, width=w)
+    back_rect = [int(3.5 * scale), int(1 * scale), int(12.5 * scale), int(13 * scale)]
+    draw.rounded_rectangle(back_rect, radius=int(2 * scale), outline=color, width=w)
 
-    # 2. 앞면 열린 커버/플랩 외곽선 (좌측 영역)
-    front_rect = [int(1.8 * scale), int(2.2 * scale), int(8.8 * scale), int(12.8 * scale)]
-    # 겹치는 뒷배경 선을 투명하게 지우고 전면 플랩만 정갈하게 표시
-    draw.rounded_rectangle(front_rect, radius=int(2.2 * scale), fill=(242, 244, 246, 255), outline=color, width=w)
+    front_rect = [int(1 * scale), int(1 * scale), int(8.5 * scale), int(13 * scale)]
+    draw.rounded_rectangle(front_rect, radius=int(2 * scale), fill=(242, 244, 246, 255), outline=color, width=w)
 
-    res = img.resize(size, Image.Resampling.LANCZOS)
+    bbox = img.getbbox()
+    cropped = img.crop(bbox) if bbox else img
+    res = cropped.resize(size, Image.Resampling.LANCZOS)
     return ctk.CTkImage(light_image=res, dark_image=res, size=size)
 
 
 # ==========================================
-# 4. 애플/토스 스타일 커스텀 꺾쇠 OptionMenu
+# 4. 아래 화살표(⬇)가 적용된 OptionMenu
 # ==========================================
 class ModernOptionMenu(ctk.CTkOptionMenu):
-    """기본 역삼각형을 숨기고 슬림한 꺾쇠(Chevron)를 렌더링하는 위젯"""
+    """정렬 방식 선택 드롭다운 - 요청하신 아래 화살표(⬇) 렌더링"""
     def _draw(self, no_color_updates=False):
         super()._draw(no_color_updates)
         try:
-            self._canvas.itemconfigure("dropdown_arrow", state="hidden")
-            coords = self._canvas.coords("dropdown_arrow")
-            if coords and len(coords) >= 6:
-                cx = (min(coords[0], coords[2], coords[4]) + max(coords[0], coords[2], coords[4])) / 2
-                cy = (min(coords[1], coords[3], coords[5]) + max(coords[1], coords[3], coords[5])) / 2
-                w, h = 5, 3
-                chevron_coords = [cx - w, cy - h, cx, cy + h, cx + w, cy - h]
-                
-                if self._canvas.find_withtag("custom_chevron"):
-                    self._canvas.coords("custom_chevron", *chevron_coords)
-                    self._canvas.itemconfigure(
-                        "custom_chevron",
-                        fill="#6B7280",
-                        width=2,
-                        capstyle="round",
-                        joinstyle="round"
-                    )
-                else:
-                    self._canvas.create_line(
-                        chevron_coords,
-                        fill="#6B7280",
-                        width=2,
-                        capstyle="round",
-                        joinstyle="round",
-                        tags="custom_chevron"
-                    )
-                self._canvas.tag_raise("custom_chevron")
-                if hasattr(self, "_clicked"):
-                    self._canvas.tag_bind("custom_chevron", "<Button-1>", self._clicked)
-                if hasattr(self, "_on_enter"):
-                    self._canvas.tag_bind("custom_chevron", "<Enter>", self._on_enter)
-                if hasattr(self, "_on_leave"):
-                    self._canvas.tag_bind("custom_chevron", "<Leave>", self._on_leave)
+            # 기존 기본 역삼각형 숨김
+            if self._canvas.find_withtag("dropdown_arrow"):
+                self._canvas.itemconfigure("dropdown_arrow", state="hidden")
+
+            # 우측 정중앙 좌표 계산
+            w = self._current_width
+            h = self._current_height
+            cx = w - 16
+            cy = h / 2
+
+            # 기존 화살표 제거 후 재작성
+            self._canvas.delete("custom_arrow")
+
+            # ⬇ 아래 방향 화살표 그리기 (세로선 + 아래 화살촉)
+            self._canvas.create_line(
+                cx, cy - 5, cx, cy + 4,
+                fill="#4E5968", width=2, capstyle="round",
+                tags="custom_arrow"
+            )
+            self._canvas.create_line(
+                cx - 3.5, cy + 0.5, cx, cy + 4.5, cx + 3.5, cy + 0.5,
+                fill="#4E5968", width=2, capstyle="round", joinstyle="round",
+                tags="custom_arrow"
+            )
+            self._canvas.tag_raise("custom_arrow")
+
+            if hasattr(self, "_clicked"):
+                self._canvas.tag_bind("custom_arrow", "<Button-1>", self._clicked)
         except Exception:
             pass
 
@@ -266,12 +258,12 @@ class AboutDialog(ctk.CTkToplevel):
 
 
 class WarningDialog(ctk.CTkToplevel):
-    """영문 입력 안내 모달 팝업"""
-    def __init__(self, parent, message, app_font):
+    """안내/경고 통일 모달 팝업"""
+    def __init__(self, parent, message, app_font, title_text="안내"):
         super().__init__(parent)
 
         self.title("안내")
-        self.geometry("420x220")
+        self.geometry("400x220")
         self.resizable(False, False)
         self.configure(fg_color="#FFFFFF")
 
@@ -281,11 +273,11 @@ class WarningDialog(ctk.CTkToplevel):
         self.update_idletasks()
         pw, ph = parent.winfo_width(), parent.winfo_height()
         px, py = parent.winfo_x(), parent.winfo_y()
-        self.geometry(f"+{px + (pw - 420) // 2}+{py + (ph - 220) // 2}")
+        self.geometry(f"+{px + (pw - 400) // 2}+{py + (ph - 220) // 2}")
 
         self.header_label = ctk.CTkLabel(
             self,
-            text="정렬 입력 안내",
+            text=title_text,
             font=ctk.CTkFont(family=app_font, size=18, weight="bold"),
             text_color="#191F28"
         )
@@ -297,7 +289,7 @@ class WarningDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(family=app_font, size=12),
             text_color="#4E5968",
             justify="center",
-            wraplength=360
+            wraplength=340
         )
         self.body_label.pack(expand=True, padx=20, pady=(0, 16))
 
@@ -575,21 +567,21 @@ class ReportMergerApp(ctk.CTk):
         super().__init__()
 
         self.title("엑셀 문서 자동 취합 프로그램")
-        
+
         self.geometry("540 x 830")
         self.minsize(480, 720)
         self.resizable(True, True)
         self.configure(fg_color="#F2F4F6")
 
         self.selected_files = []
-        
+
         self.save_dir_path = str(Path.home() / "Desktop")
         if not os.path.exists(self.save_dir_path):
             self.save_dir_path = str(Path.home())
 
-        # 아이콘 객체 초기화 (14x14px)
-        self.icon_reload = create_reload_icon(size=(14, 14), color="#4E5968")
-        self.icon_folder = create_folder_icon(size=(14, 14), color="#333D4B")
+        # 타이트하게 크롭된 아이콘 초기화 (13x13px)
+        self.icon_reload = create_reload_icon(size=(13, 13), color="#4E5968")
+        self.icon_folder = create_folder_icon(size=(13, 13), color="#333D4B")
 
         self._init_ui()
         self._setup_drag_and_drop()
@@ -654,10 +646,10 @@ class ReportMergerApp(ctk.CTk):
         )
         self.file_btn.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        # [목록 비우기] 버튼 (회전 화살표 아이콘 적용)
+        # [목록 비우기] 버튼 (아이콘과 글자 거리 스페이스 1칸 밀착)
         self.clear_btn = ctk.CTkButton(
             self.btn_frame,
-            text=" 목록 비우기",
+            text="목록 비우기",
             image=self.icon_reload,
             compound="left",
             font=ctk.CTkFont(family=APP_FONT, size=12),
@@ -665,7 +657,7 @@ class ReportMergerApp(ctk.CTk):
             hover_color="#E5E8EB",
             text_color="#4E5968",
             corner_radius=10,
-            width=104,
+            width=94,
             height=36,
             command=self.clear_file_list
         )
@@ -710,9 +702,7 @@ class ReportMergerApp(ctk.CTk):
         self.filename_entry.insert(0, "통합_보고서.xlsx")
         self.filename_entry.pack(fill="x", padx=20, pady=(0, 10))
 
-        # ==========================================
-        # [섹션] 저장 위치 (호버 툴팁 물음표 아이콘 적용)
-        # ==========================================
+        # 저장 위치 (호버 툴팁 물음표 아이콘)
         self.path_header_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.path_header_frame.pack(fill="x", padx=20, pady=(0, 4))
 
@@ -755,13 +745,13 @@ class ReportMergerApp(ctk.CTk):
         self.path_entry.insert(0, self.save_dir_path)
         self.path_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        # [폴더 변경] 버튼 (오픈 폴더 아이콘 적용)
+        # [폴더 변경] 버튼 (아이콘과 글자 거리 스페이스 1칸 밀착)
         self.path_btn = ctk.CTkButton(
             self.path_frame,
-            text=" 폴더 변경",
+            text="폴더 변경",
             image=self.icon_folder,
             compound="left",
-            width=98,
+            width=88,
             height=36,
             font=ctk.CTkFont(family=APP_FONT, size=12),
             fg_color="#F2F4F6",
@@ -772,9 +762,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.path_btn.pack(side="right")
 
-        # ==========================================
-        # [섹션] 데이터 정렬 옵션 (핑크색 '(선택)' + 물음표 아이콘)
-        # ==========================================
+        # 데이터 정렬 옵션 (핑크색 '(선택)' + 물음표 아이콘)
         self.sort_header_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.sort_header_frame.pack(fill="x", padx=20, pady=(0, 4))
 
@@ -829,6 +817,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.sort_col_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
+        # 아래 화살표(⬇)가 적용된 드롭다운 위젯
         self.sort_order_menu = ModernOptionMenu(
             self.sort_frame,
             values=["정렬 안 함", "오름차순 (1→9, A→Z)", "내림차순 (9→1, Z→A)"],
@@ -1009,21 +998,23 @@ class ReportMergerApp(ctk.CTk):
         self.after(0, update)
 
     def start_merge_thread(self):
+        # 1) 파일 미선택 시 디자인 가이드 통일 모달 팝업 호출
         if not self.selected_files:
-            messagebox.showwarning("안내", "병합할 파일(.zip 또는 엑셀 문서)을 먼저 추가해 주세요.")
+            warn_msg = "병합할 파일(.zip 또는 엑셀 문서)을\n먼저 추가해 주세요."
+            WarningDialog(self, warn_msg, APP_FONT, title_text="파일 선택 안내")
             return
 
         sort_col_input = self.sort_col_entry.get().strip()
         sort_order_mode = self.sort_order_menu.get()
 
-        # 1) 한글 입력 검사 -> 팝업 후 중단
+        # 2) 한글 입력 검사 -> 팝업 후 중단
         if sort_col_input and has_korean(sort_col_input):
             warn_msg = "데이터 정렬 값을 영문으로 표시해 주세요.\n(A열을 정렬하고 싶으면 A, B열을 정렬하고 싶으면 B 등)"
-            WarningDialog(self, warn_msg, APP_FONT)
+            WarningDialog(self, warn_msg, APP_FONT, title_text="정렬 입력 안내")
             self.sort_col_entry.focus()
             return
 
-        # 2) 열 입력은 하였으나 '정렬 안 함'인 경우 확인 팝업
+        # 3) 열 입력은 하였으나 '정렬 안 함'인 경우 확인 팝업
         if sort_col_input and sort_order_mode == "정렬 안 함":
             dlg = SortConflictDialog(self, sort_col_input, APP_FONT)
             self.wait_window(dlg)
@@ -1040,7 +1031,8 @@ class ReportMergerApp(ctk.CTk):
 
         save_dir = self.path_entry.get().strip()
         if not os.path.exists(save_dir):
-            messagebox.showerror("오류", "유효한 저장 경로를 지정해 주세요.")
+            warn_msg = "유효한 저장 경로를 지정해 주세요."
+            WarningDialog(self, warn_msg, APP_FONT, title_text="저장 경로 안내")
             return
 
         out_path = os.path.join(save_dir, out_name)
@@ -1098,7 +1090,8 @@ class ReportMergerApp(ctk.CTk):
                             password = self.ask_zip_password(zip_path)
                             if not password:
                                 self.reset_ui()
-                                messagebox.showinfo("취소", f"[{os.path.basename(zip_path)}] 암호 입력을 취소하여 작업을 중단합니다.")
+                                warn_msg = f"[{os.path.basename(zip_path)}] 암호 입력을 취소하여 작업을 중단합니다."
+                                WarningDialog(self, warn_msg, APP_FONT, title_text="작업 취소")
                                 return
 
                     for root, _, files in os.walk(sub_dir):
@@ -1112,7 +1105,8 @@ class ReportMergerApp(ctk.CTk):
                 total_docs = len(excel_files_to_read)
                 if total_docs == 0:
                     self.reset_ui()
-                    messagebox.showwarning("경고", "취합할 수 있는 유효한 엑셀 또는 CSV 데이터가 없습니다.")
+                    warn_msg = "취합할 수 있는 유효한 엑셀 또는 CSV 데이터가 없습니다."
+                    WarningDialog(self, warn_msg, APP_FONT, title_text="데이터 없음")
                     return
 
                 # 2단계: 데이터 로드 (30% ~ 80%)
@@ -1179,7 +1173,8 @@ class ReportMergerApp(ctk.CTk):
         except Exception as e:
             self.reset_ui()
             self._set_progress(0, "오류 발생")
-            messagebox.showerror("오류 발생", f"작업 중 오류가 발생했습니다:\n{str(e)}")
+            warn_msg = f"작업 중 오류가 발생했습니다:\n{str(e)}"
+            self.after(0, lambda: WarningDialog(self, warn_msg, APP_FONT, title_text="오류 발생"))
 
     def reset_ui(self):
         self.run_btn.configure(
