@@ -46,6 +46,18 @@ def get_system_font():
 APP_FONT = get_system_font()
 
 
+def excel_col_to_index(col_str):
+    """'A' -> 0, 'B' -> 1, 'Q' -> 16, 'AA' -> 26 등 엑셀 열 문자를 0-based 인덱스로 변환"""
+    num = 0
+    clean = col_str.strip().upper().replace("열", "")
+    for c in clean:
+        if "A" <= c <= "Z":
+            num = num * 26 + (ord(c) - ord("A") + 1)
+        else:
+            return None
+    return (num - 1) if num > 0 else None
+
+
 # ==========================================
 # 3. 디자인 가이드 적용 모달 팝업
 # ==========================================
@@ -68,7 +80,6 @@ class OverwriteDialog(ctk.CTkToplevel):
         px, py = parent.winfo_x(), parent.winfo_y()
         self.geometry(f"+{px + (pw - 400) // 2}+{py + (ph - 240) // 2}")
 
-        # 1. Header Text
         self.header_label = ctk.CTkLabel(
             self,
             text="동일 파일명 확인",
@@ -77,7 +88,6 @@ class OverwriteDialog(ctk.CTkToplevel):
         )
         self.header_label.pack(pady=(26, 8))
 
-        # 2. Body Text
         body_text = (
             f"저장 위치에 [{filename}] 파일이 이미 존재합니다.\n\n"
             "기존 파일에 덮어 씌우시겠습니까?"
@@ -92,7 +102,6 @@ class OverwriteDialog(ctk.CTkToplevel):
         )
         self.body_label.pack(expand=True, padx=20, pady=(0, 18))
 
-        # 3. Bottom Action Buttons (좌: 보조 / 우: 주요 실행)
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(fill="x", padx=24, pady=(0, 22))
 
@@ -135,11 +144,11 @@ class OverwriteDialog(ctk.CTkToplevel):
 
 class CompleteDialog(ctk.CTkToplevel):
     """작업 완료 안내 모달 팝업"""
-    def __init__(self, parent, total_docs, out_path, app_font):
+    def __init__(self, parent, total_docs, out_path, app_font, sort_info=None):
         super().__init__(parent)
 
         self.title("취합 완료")
-        self.geometry("400x270")
+        self.geometry("400x290")
         self.resizable(False, False)
         self.configure(fg_color="#FFFFFF")
 
@@ -149,21 +158,21 @@ class CompleteDialog(ctk.CTkToplevel):
         self.update_idletasks()
         pw, ph = parent.winfo_width(), parent.winfo_height()
         px, py = parent.winfo_x(), parent.winfo_y()
-        self.geometry(f"+{px + (pw - 400) // 2}+{py + (ph - 270) // 2}")
+        self.geometry(f"+{px + (pw - 400) // 2}+{py + (ph - 290) // 2}")
 
-        # 1. Header Text
         self.header_label = ctk.CTkLabel(
             self,
             text="취합 완료",
             font=ctk.CTkFont(family=app_font, size=19, weight="bold"),
             text_color="#191F28"
         )
-        self.header_label.pack(pady=(26, 8))
+        self.header_label.pack(pady=(24, 6))
 
-        # 2. Body Text
+        sort_line = f"• 정렬 기준: {sort_info}\n" if sort_info else ""
         body_text = (
             "문서 취합이 성공적으로 완료되었습니다.\n\n"
             f"• 처리된 문서 수: 총 {total_docs}개\n"
+            f"{sort_line}"
             f"• 저장 파일: {os.path.basename(out_path)}\n"
             f"• 저장 위치: {os.path.dirname(out_path)}"
         )
@@ -177,7 +186,6 @@ class CompleteDialog(ctk.CTkToplevel):
         )
         self.body_label.pack(expand=True, padx=20, pady=(0, 18))
 
-        # 3. Bottom Action Buttons (좌: 폴더 열기 / 우: 확인)
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(fill="x", padx=24, pady=(0, 22))
 
@@ -228,9 +236,8 @@ class ReportMergerApp(ctk.CTk):
 
         self.title("엑셀 문서 자동 취합 프로그램")
         
-        # 슬림한 가로 너비(520px) 및 자유로운 크기 조절 허용
-        self.geometry("520 x 780")
-        self.minsize(450, 680)
+        self.geometry("540 x 840")
+        self.minsize(470, 720)
         self.resizable(True, True)
         self.configure(fg_color="#F2F4F6")
 
@@ -244,7 +251,7 @@ class ReportMergerApp(ctk.CTk):
         self._setup_drag_and_drop()
 
     def _init_ui(self):
-        # 1. 상단 안내 카드
+        # 1. 상단 타이틀 카드
         self.header_card = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=16)
         self.header_card.pack(fill="x", padx=16, pady=(16, 8))
 
@@ -270,7 +277,7 @@ class ReportMergerApp(ctk.CTk):
         self.content_card = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=16)
         self.content_card.pack(fill="both", expand=True, padx=16, pady=(0, 10))
 
-        # 파일 선택 버튼 영역
+        # 파일 선택 및 목록 비우기
         self.btn_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.btn_frame.pack(fill="x", padx=20, pady=(16, 6))
 
@@ -314,7 +321,7 @@ class ReportMergerApp(ctk.CTk):
             selectforeground="#1B64DA",
             font=(APP_FONT, 10)
         )
-        self.file_listbox.pack(fill="both", expand=True, padx=20, pady=(0, 12))
+        self.file_listbox.pack(fill="both", expand=True, padx=20, pady=(0, 10))
 
         # 저장 파일명
         self.name_label = ctk.CTkLabel(
@@ -330,14 +337,14 @@ class ReportMergerApp(ctk.CTk):
             font=ctk.CTkFont(family=APP_FONT, size=12),
             placeholder_text="통합_보고서.xlsx",
             corner_radius=10,
-            height=38,
+            height=36,
             fg_color="#F9FAFB",
             border_color="#E5E8EB",
             border_width=1,
             text_color="#191F28"
         )
         self.filename_entry.insert(0, "통합_보고서.xlsx")
-        self.filename_entry.pack(fill="x", padx=20, pady=(0, 12))
+        self.filename_entry.pack(fill="x", padx=20, pady=(0, 10))
 
         # 저장 경로
         self.path_label = ctk.CTkLabel(
@@ -349,13 +356,13 @@ class ReportMergerApp(ctk.CTk):
         self.path_label.pack(anchor="w", padx=20, pady=(0, 4))
 
         self.path_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
-        self.path_frame.pack(fill="x", padx=20, pady=(0, 12))
+        self.path_frame.pack(fill="x", padx=20, pady=(0, 10))
 
         self.path_entry = ctk.CTkEntry(
             self.path_frame,
             font=ctk.CTkFont(family=APP_FONT, size=12),
             corner_radius=10,
-            height=38,
+            height=36,
             fg_color="#F9FAFB",
             border_color="#E5E8EB",
             border_width=1,
@@ -368,7 +375,7 @@ class ReportMergerApp(ctk.CTk):
             self.path_frame,
             text="폴더 변경",
             width=76,
-            height=38,
+            height=36,
             font=ctk.CTkFont(family=APP_FONT, size=12),
             fg_color="#F2F4F6",
             hover_color="#E5E8EB",
@@ -378,9 +385,52 @@ class ReportMergerApp(ctk.CTk):
         )
         self.path_btn.pack(side="right")
 
+        # [신규 섹션] 데이터 정렬 옵션 (기준 열 & 정렬 방식)
+        self.sort_label = ctk.CTkLabel(
+            self.content_card,
+            text="데이터 정렬 옵션 (선택 사항)",
+            font=ctk.CTkFont(family=APP_FONT, size=12, weight="bold"),
+            text_color="#333D4B"
+        )
+        self.sort_label.pack(anchor="w", padx=20, pady=(0, 4))
+
+        self.sort_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
+        self.sort_frame.pack(fill="x", padx=20, pady=(0, 12))
+
+        self.sort_col_entry = ctk.CTkEntry(
+            self.sort_frame,
+            font=ctk.CTkFont(family=APP_FONT, size=12),
+            placeholder_text="기준 열 (예: Q, B, Q열 또는 컬럼명)",
+            corner_radius=10,
+            height=36,
+            fg_color="#F9FAFB",
+            border_color="#E5E8EB",
+            border_width=1,
+            text_color="#191F28"
+        )
+        self.sort_col_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        self.sort_order_menu = ctk.CTkOptionMenu(
+            self.sort_frame,
+            values=["정렬 안 함", "오름차순 (1→9, A→Z)", "내림차순 (9→1, Z→A)"],
+            font=ctk.CTkFont(family=APP_FONT, size=11),
+            dropdown_font=ctk.CTkFont(family=APP_FONT, size=11),
+            fg_color="#F2F4F6",
+            button_color="#E5E8EB",
+            button_hover_color="#D2D6DB",
+            text_color="#333D4B",
+            dropdown_fg_color="#FFFFFF",
+            dropdown_text_color="#191F28",
+            corner_radius=10,
+            width=165,
+            height=36
+        )
+        self.sort_order_menu.set("정렬 안 함")
+        self.sort_order_menu.pack(side="right")
+
         # 프로그레스 영역
         self.progress_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
-        self.progress_frame.pack(fill="x", padx=20, pady=(0, 12))
+        self.progress_frame.pack(fill="x", padx=20, pady=(0, 10))
 
         self.progress_status_label = ctk.CTkLabel(
             self.progress_frame,
@@ -422,7 +472,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.run_btn.pack(fill="x", padx=16, pady=(0, 10))
 
-        # 4. 맨 하단 정보 (면책 문구 및 버전/제작자 정보 - 폰트 크기 11pt로 확대)
+        # 4. 맨 하단 정보 (면책 문구 + 버전 1.5)
         self.footer_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.footer_frame.pack(fill="x", padx=18, pady=(0, 12))
 
@@ -439,7 +489,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.disclaimer_label.pack(side="left")
 
-        meta_text = "최종 버전 : 1.4\n최종 수정 날짜 : 26.09.03\n제작자 : kkh"
+        meta_text = "최종 버전 : 1.5\n최종 수정 날짜 : 26.09.03\n제작자 : kkh"
         self.meta_label = ctk.CTkLabel(
             self.footer_frame,
             text=meta_text,
@@ -544,13 +594,16 @@ class ReportMergerApp(ctk.CTk):
 
         out_path = os.path.join(save_dir, out_name)
 
-        # 동일 파일명 중복 확인 모달 호출
         if os.path.exists(out_path):
             dlg = OverwriteDialog(self, out_name, APP_FONT)
             self.wait_window(dlg)
             if not dlg.result:
                 self.filename_entry.focus()
                 return
+
+        # 정렬 설정값 읽기
+        sort_col_input = self.sort_col_entry.get().strip()
+        sort_order_mode = self.sort_order_menu.get()
 
         self.run_btn.configure(
             state="disabled",
@@ -560,11 +613,16 @@ class ReportMergerApp(ctk.CTk):
         )
         self._set_progress(0, "취합 준비 중...")
 
-        threading.Thread(target=self.process_merge, args=(out_path,), daemon=True).start()
+        threading.Thread(
+            target=self.process_merge,
+            args=(out_path, sort_col_input, sort_order_mode),
+            daemon=True
+        ).start()
 
-    def process_merge(self, out_path):
+    def process_merge(self, out_path, sort_col_input, sort_order_mode):
         dataframes = []
         excel_files_to_read = []
+        sort_summary = None
 
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -610,9 +668,9 @@ class ReportMergerApp(ctk.CTk):
                     messagebox.showwarning("경고", "취합할 수 있는 유효한 엑셀 또는 CSV 데이터가 없습니다.")
                     return
 
-                # 2단계: 데이터 읽기 (30% ~ 85%)
+                # 2단계: 데이터 읽기 (30% ~ 80%)
                 for idx, file_path in enumerate(excel_files_to_read):
-                    read_percent = 30 + int(((idx + 1) / total_docs) * 55)
+                    read_percent = 30 + int(((idx + 1) / total_docs) * 50)
                     self._set_progress(read_percent, f"문서 데이터 분석 중 ({idx + 1}/{total_docs})...")
 
                     ext = os.path.splitext(file_path)[1].lower()
@@ -632,15 +690,49 @@ class ReportMergerApp(ctk.CTk):
                         df.columns = df.columns.astype(str).str.strip()
                         dataframes.append(df)
 
-                # 3단계: 통합 및 엑셀 저장 (85% ~ 100%)
-                self._set_progress(90, "데이터 컬럼 매핑 및 엑셀 파일 생성 중...")
+                # 3단계: 통합 및 컬럼 정렬 (80% ~ 100%)
+                self._set_progress(85, "데이터 컬럼 매핑 중...")
                 merged_df = pd.concat(dataframes, ignore_index=True, sort=False)
+
+                # [정렬 로직 적용]
+                if sort_col_input and sort_order_mode != "정렬 안 함":
+                    self._set_progress(90, "설정된 기준 열로 데이터 정렬 중...")
+                    target_col = None
+
+                    # 1) 입력값이 실제 컬럼명과 일치하는 경우
+                    if sort_col_input in merged_df.columns:
+                        target_col = sort_col_input
+                    else:
+                        # 2) 엑셀 열 알파벳(예: Q, B, Q열)인 경우 인덱스로 변환
+                        col_idx = excel_col_to_index(sort_col_input)
+                        if col_idx is not None and 0 <= col_idx < len(merged_df.columns):
+                            target_col = merged_df.columns[col_idx]
+
+                    if target_col is not None:
+                        is_ascending = "오름차순" in sort_order_mode
+                        try:
+                            merged_df = merged_df.sort_values(
+                                by=target_col,
+                                ascending=is_ascending,
+                                na_position="last"
+                            )
+                        except Exception:
+                            # 혼합 타입 대비 문자열 기준 정렬
+                            merged_df = merged_df.sort_values(
+                                by=target_col,
+                                ascending=is_ascending,
+                                na_position="last",
+                                key=lambda s: s.astype(str)
+                            )
+                        sort_summary = f"[{target_col}] 열 기준 ({'오름차순' if is_ascending else '내림차순'})"
+
+                self._set_progress(95, "최종 엑셀 파일 생성 중...")
                 merged_df.to_excel(out_path, index=False, engine="openpyxl")
                 self._set_progress(100, "완료")
 
             self.reset_ui()
-            # 커스텀 작업 완료 모달 팝업 호출
-            self.after(0, lambda: CompleteDialog(self, total_docs, out_path, APP_FONT))
+            # 완료 팝업 호출 (정렬 정보 포함)
+            self.after(0, lambda: CompleteDialog(self, total_docs, out_path, APP_FONT, sort_summary))
 
         except Exception as e:
             self.reset_ui()
@@ -657,7 +749,6 @@ class ReportMergerApp(ctk.CTk):
 
 
 if __name__ == "__main__":
-    # PyInstaller 부트로더 스플래시 창 종료 후 메인 윈도우 전환
     try:
         import pyi_splash
         pyi_splash.close()
