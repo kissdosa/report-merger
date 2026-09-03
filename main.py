@@ -127,7 +127,7 @@ class AboutDialog(ctk.CTkToplevel):
 
 
 class WarningDialog(ctk.CTkToplevel):
-    """정렬 입력 오류 안내 모달 팝업"""
+    """영문 입력 안내 모달 팝업"""
     def __init__(self, parent, message, app_font):
         super().__init__(parent)
 
@@ -175,6 +175,88 @@ class WarningDialog(ctk.CTkToplevel):
             command=self.destroy
         )
         self.btn_confirm.pack(pady=(0, 20))
+
+
+class SortConflictDialog(ctk.CTkToplevel):
+    """정렬 열을 입력했으나 '정렬 안 함'인 경우 확인 팝업"""
+    def __init__(self, parent, col_name, app_font):
+        super().__init__(parent)
+        self.result = False  # False: 정렬 선택, True: 그냥 진행
+
+        self.title("정렬 설정 확인")
+        self.geometry("420x240")
+        self.resizable(False, False)
+        self.configure(fg_color="#FFFFFF")
+
+        self.transient(parent)
+        self.grab_set()
+
+        self.update_idletasks()
+        pw, ph = parent.winfo_width(), parent.winfo_height()
+        px, py = parent.winfo_x(), parent.winfo_y()
+        self.geometry(f"+{px + (pw - 420) // 2}+{py + (ph - 240) // 2}")
+
+        self.header_label = ctk.CTkLabel(
+            self,
+            text="정렬 설정 확인",
+            font=ctk.CTkFont(family=app_font, size=19, weight="bold"),
+            text_color="#191F28"
+        )
+        self.header_label.pack(pady=(24, 8))
+
+        display_col = col_name.strip().upper()
+        if not display_col.endswith("열"):
+            display_col += "열"
+
+        body_text = f"“{display_col}을 입력하셨으나 정렬 안함으로 선택 하였습니다.\n이대로 진행 하시겠습니까?”"
+        self.body_label = ctk.CTkLabel(
+            self,
+            text=body_text,
+            font=ctk.CTkFont(family=app_font, size=12),
+            text_color="#4E5968",
+            justify="center",
+            wraplength=360
+        )
+        self.body_label.pack(expand=True, padx=20, pady=(0, 18))
+
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=24, pady=(0, 22))
+
+        self.btn_select = ctk.CTkButton(
+            btn_frame,
+            text="정렬 선택",
+            width=175,
+            height=44,
+            font=ctk.CTkFont(family=app_font, size=13),
+            fg_color="#F2F4F6",
+            hover_color="#E5E8EB",
+            text_color="#333D4B",
+            corner_radius=12,
+            command=self._on_select
+        )
+        self.btn_select.pack(side="left", padx=(0, 8))
+
+        self.btn_proceed = ctk.CTkButton(
+            btn_frame,
+            text="그냥 진행",
+            width=175,
+            height=44,
+            font=ctk.CTkFont(family=app_font, size=13, weight="bold"),
+            fg_color="#3182F6",
+            hover_color="#1B64DA",
+            text_color="#FFFFFF",
+            corner_radius=12,
+            command=self._on_proceed
+        )
+        self.btn_proceed.pack(side="right")
+
+    def _on_select(self):
+        self.result = False
+        self.destroy()
+
+    def _on_proceed(self):
+        self.result = True
+        self.destroy()
 
 
 class OverwriteDialog(ctk.CTkToplevel):
@@ -259,7 +341,7 @@ class OverwriteDialog(ctk.CTkToplevel):
 
 
 class CompleteDialog(ctk.CTkToplevel):
-    """작업 완료 안내 모달 팝업 (본문 내용 좌측 정렬 적용)"""
+    """작업 완료 안내 모달 팝업 (본문 항목 좌측 정렬)"""
     def __init__(self, parent, total_docs, out_path, app_font, sort_info=None):
         super().__init__(parent)
 
@@ -284,7 +366,6 @@ class CompleteDialog(ctk.CTkToplevel):
         )
         self.header_label.pack(pady=(22, 6))
 
-        # 좌측 정렬을 위한 내부 정보 컨테이너 프레임
         detail_frame = ctk.CTkFrame(self, fg_color="#F9FAFB", corner_radius=10)
         detail_frame.pack(fill="x", padx=24, pady=(0, 16))
 
@@ -356,8 +437,8 @@ class ReportMergerApp(ctk.CTk):
 
         self.title("엑셀 문서 자동 취합 프로그램")
         
-        self.geometry("540 x 860")
-        self.minsize(480, 740)
+        self.geometry("540 x 890")
+        self.minsize(480, 760)
         self.resizable(True, True)
         self.configure(fg_color="#F2F4F6")
 
@@ -371,7 +452,7 @@ class ReportMergerApp(ctk.CTk):
         self._setup_drag_and_drop()
 
     def _init_ui(self):
-        # 1. 상단 타이틀 카드 (우측 상단 제품 정보 버튼 배치)
+        # 1. 상단 타이틀 카드 (우측 상단 제품 정보 버튼)
         self.header_card = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=16)
         self.header_card.pack(fill="x", padx=16, pady=(16, 8))
 
@@ -444,7 +525,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.clear_btn.pack(side="right")
 
-        # 파일 목록 박스 (드래그 앤 드롭 지원)
+        # 파일 목록 박스
         self.file_listbox = tk.Listbox(
             self.content_card,
             height=5,
@@ -483,14 +564,23 @@ class ReportMergerApp(ctk.CTk):
         self.filename_entry.insert(0, "통합_보고서.xlsx")
         self.filename_entry.pack(fill="x", padx=20, pady=(0, 10))
 
-        # 저장 경로
-        self.path_label = ctk.CTkLabel(
+        # 저장 위치 (제목 및 작은 글씨 서브 문구)
+        self.path_title_label = ctk.CTkLabel(
             self.content_card,
-            text="저장 위치 (기본값: 바탕화면)",
+            text="저장 위치",
             font=ctk.CTkFont(family=APP_FONT, size=12, weight="bold"),
             text_color="#333D4B"
         )
-        self.path_label.pack(anchor="w", padx=20, pady=(0, 4))
+        self.path_title_label.pack(anchor="w", padx=20, pady=(0, 2))
+
+        self.path_desc_label = ctk.CTkLabel(
+            self.content_card,
+            text="- 기본 값은 바탕화면으로 설정되어 있습니다. 변경을 원하시면 폴더 변경을 눌러 선택해주세요.",
+            font=ctk.CTkFont(family=APP_FONT, size=11),
+            text_color="#8B95A1",
+            justify="left"
+        )
+        self.path_desc_label.pack(anchor="w", padx=20, pady=(0, 4))
 
         self.path_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.path_frame.pack(fill="x", padx=20, pady=(0, 10))
@@ -522,14 +612,23 @@ class ReportMergerApp(ctk.CTk):
         )
         self.path_btn.pack(side="right")
 
-        # 데이터 정렬 옵션 영역
-        self.sort_label = ctk.CTkLabel(
+        # 데이터 정렬 옵션 (제목 및 작은 글씨 서브 문구)
+        self.sort_title_label = ctk.CTkLabel(
             self.content_card,
-            text="데이터 정렬 옵션 (선택 사항)",
+            text="데이터 정렬 옵션",
             font=ctk.CTkFont(family=APP_FONT, size=12, weight="bold"),
             text_color="#333D4B"
         )
-        self.sort_label.pack(anchor="w", padx=20, pady=(0, 4))
+        self.sort_title_label.pack(anchor="w", padx=20, pady=(0, 2))
+
+        self.sort_desc_label = ctk.CTkLabel(
+            self.content_card,
+            text="* 선택 사항 입니다. 미선택시 별도의 정렬은 진행되지 않습니다.",
+            font=ctk.CTkFont(family=APP_FONT, size=11),
+            text_color="#8B95A1",
+            justify="left"
+        )
+        self.sort_desc_label.pack(anchor="w", padx=20, pady=(0, 4))
 
         self.sort_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.sort_frame.pack(fill="x", padx=20, pady=(0, 2))
@@ -569,18 +668,18 @@ class ReportMergerApp(ctk.CTk):
         self.sort_order_menu.set("정렬 안 함")
         self.sort_order_menu.pack(side="right")
 
-        # 실시간 한글 입력 시 표시되는 붉은 경고 문구 라벨
+        # 실시간 한글 입력 시 표시되는 붉은 경고 라벨
         self.sort_warn_label = ctk.CTkLabel(
             self.content_card,
             text="",
             font=ctk.CTkFont(family=APP_FONT, size=11, weight="bold"),
             text_color="#FF3B30"
         )
-        self.sort_warn_label.pack(anchor="w", padx=22, pady=(0, 8))
+        self.sort_warn_label.pack(anchor="w", padx=22, pady=(0, 6))
 
         # 프로그레스 영역
         self.progress_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
-        self.progress_frame.pack(fill="x", padx=20, pady=(0, 10))
+        self.progress_frame.pack(fill="x", padx=20, pady=(0, 8))
 
         self.progress_status_label = ctk.CTkLabel(
             self.progress_frame,
@@ -606,7 +705,7 @@ class ReportMergerApp(ctk.CTk):
             fg_color="#E5E8EB"
         )
         self.progress_bar.set(0)
-        self.progress_bar.pack(fill="x", padx=20, pady=(0, 16))
+        self.progress_bar.pack(fill="x", padx=20, pady=(0, 14))
 
         # 3. 하단 CTA 실행 버튼
         self.run_btn = ctk.CTkButton(
@@ -622,7 +721,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.run_btn.pack(fill="x", padx=16, pady=(0, 10))
 
-        # 4. 맨 하단 면책 문구
+        # 4. 맨 하단 면책 문구 (11pt)
         disclaimer_text = (
             "본 프로그램은 업무 지원용 도구로 자유로운 수정, 사용 및 배포가 가능합니다.\n"
             "(사용 중 발생하는 모든 문제는 사용자 본인의 책임입니다.)"
@@ -653,7 +752,6 @@ class ReportMergerApp(ctk.CTk):
             import windnd
 
             def on_drop(files):
-                # UI 스레드로 안전하게 비동기 전달 (크래시 원천 방지)
                 self.after(10, self._process_dropped_files, files)
 
             windnd.hook_dropfiles(self.file_listbox, func=on_drop)
@@ -736,13 +834,26 @@ class ReportMergerApp(ctk.CTk):
             messagebox.showwarning("안내", "병합할 파일(.zip 또는 엑셀 문서)을 먼저 추가해 주세요.")
             return
 
-        # 한글 입력 여부 엄격 검사 -> 경고 팝업 발생 후 중단
         sort_col_input = self.sort_col_entry.get().strip()
+        sort_order_mode = self.sort_order_menu.get()
+
+        # 1) 한글 입력 검사 -> 팝업 후 중단
         if sort_col_input and has_korean(sort_col_input):
             warn_msg = "데이터 정렬 값을 영문으로 표시해 주세요.\n(A열을 정렬하고 싶으면 A, B열을 정렬하고 싶으면 B 등)"
             WarningDialog(self, warn_msg, APP_FONT)
             self.sort_col_entry.focus()
             return
+
+        # 2) 열 입력은 하였으나 '정렬 안 함'인 경우 확인 팝업
+        if sort_col_input and sort_order_mode == "정렬 안 함":
+            dlg = SortConflictDialog(self, sort_col_input, APP_FONT)
+            self.wait_window(dlg)
+            if not dlg.result:
+                # "정렬 선택" 클릭 시 중단하고 정렬 메뉴에 집중
+                return
+            else:
+                # "그냥 진행" 클릭 시 정렬 없이 취합 진행
+                sort_col_input = ""
 
         out_name = self.filename_entry.get().strip()
         if not out_name:
@@ -763,8 +874,6 @@ class ReportMergerApp(ctk.CTk):
             if not dlg.result:
                 self.filename_entry.focus()
                 return
-
-        sort_order_mode = self.sort_order_menu.get()
 
         self.run_btn.configure(
             state="disabled",
@@ -888,7 +997,6 @@ class ReportMergerApp(ctk.CTk):
                 self._set_progress(100, "완료")
 
             self.reset_ui()
-            # 커스텀 취합 완료 팝업 호출 (좌측 정렬 상세 정보)
             self.after(0, lambda: CompleteDialog(self, total_docs, out_path, APP_FONT, sort_summary))
 
         except Exception as e:
