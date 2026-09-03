@@ -1,6 +1,7 @@
 import sys
 import os
 import re
+import io
 
 # ==========================================
 # 1. 중복 실행 방지 (Windows Mutex)
@@ -65,6 +66,51 @@ def excel_col_to_index(col_str):
     return (num - 1) if num > 0 else None
 
 
+def extract_columns_from_file(file_path):
+    """파일에서 첫 번째 행(컬럼 헤더 목록)을 안전하게 추출"""
+    ext = os.path.splitext(file_path)[1].lower()
+    cols = []
+    try:
+        if ext == ".xlsx":
+            df = pd.read_excel(file_path, nrows=1, engine="openpyxl")
+            cols = [str(c).strip() for c in df.columns]
+        elif ext == ".xls":
+            df = pd.read_excel(file_path, nrows=1, engine="xlrd")
+            cols = [str(c).strip() for c in df.columns]
+        elif ext == ".csv":
+            try:
+                df = pd.read_csv(file_path, nrows=1, encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                df = pd.read_csv(file_path, nrows=1, encoding="cp949")
+            cols = [str(c).strip() for c in df.columns]
+        elif ext == ".zip":
+            with pyzipper.AESZipFile(file_path) as zf:
+                for name in zf.namelist():
+                    sub_ext = os.path.splitext(name)[1].lower()
+                    if sub_ext in [".xlsx", ".xls", ".csv"] and not name.startswith("__MACOSX"):
+                        try:
+                            data = zf.read(name)
+                            bio = io.BytesIO(data)
+                            if sub_ext == ".xlsx":
+                                df = pd.read_excel(bio, nrows=1, engine="openpyxl")
+                            elif sub_ext == ".xls":
+                                df = pd.read_excel(bio, nrows=1, engine="xlrd")
+                            elif sub_ext == ".csv":
+                                try:
+                                    df = pd.read_csv(bio, nrows=1, encoding="utf-8-sig")
+                                except UnicodeDecodeError:
+                                    bio.seek(0)
+                                    df = pd.read_csv(bio, nrows=1, encoding="cp949")
+                            cols = [str(c).strip() for c in df.columns]
+                            if cols:
+                                break
+                        except Exception:
+                            continue
+    except Exception:
+        pass
+    return cols
+
+
 # ==========================================
 # 3. 버튼용 벡터 라인 아이콘 생성기 (타이트 크롭)
 # ==========================================
@@ -110,37 +156,42 @@ def create_folder_icon(size=(13, 13), color="#333D4B"):
 
 
 # ==========================================
-# 4. 아래 화살표(⬇)가 적용된 OptionMenu
+# 4. 완벽한 좌우 대칭 아래 화살표(⬇) OptionMenu
 # ==========================================
 class ModernOptionMenu(ctk.CTkOptionMenu):
-    """정렬 방식 선택 드롭다운 - 요청하신 아래 화살표(⬇) 렌더링"""
+    """정렬 방식 선택 드롭다운 - 완벽한 좌우 대칭 아래 화살표(⬇) 렌더링"""
     def _draw(self, no_color_updates=False):
         super()._draw(no_color_updates)
         try:
-            # 기존 기본 역삼각형 숨김
             if self._canvas.find_withtag("dropdown_arrow"):
                 self._canvas.itemconfigure("dropdown_arrow", state="hidden")
 
-            # 우측 정중앙 좌표 계산
-            w = self._current_width
-            h = self._current_height
-            cx = w - 16
-            cy = h / 2
+            w = int(self._current_width)
+            h = int(self._current_height)
+            cx = w - 18
+            cy = h // 2
 
-            # 기존 화살표 제거 후 재작성
             self._canvas.delete("custom_arrow")
 
-            # ⬇ 아래 방향 화살표 그리기 (세로선 + 아래 화살촉)
+            # 1. 세로 기둥선
             self._canvas.create_line(
                 cx, cy - 5, cx, cy + 4,
                 fill="#4E5968", width=2, capstyle="round",
                 tags="custom_arrow"
             )
+            # 2. 좌측 날개 (독립 선분으로 그려 왜곡/클리핑 원천 방지)
             self._canvas.create_line(
-                cx - 3.5, cy + 0.5, cx, cy + 4.5, cx + 3.5, cy + 0.5,
-                fill="#4E5968", width=2, capstyle="round", joinstyle="round",
+                cx - 4, cy, cx, cy + 4,
+                fill="#4E5968", width=2, capstyle="round",
                 tags="custom_arrow"
             )
+            # 3. 우측 날개 (좌측과 완벽한 정수 대칭)
+            self._canvas.create_line(
+                cx + 4, cy, cx, cy + 4,
+                fill="#4E5968", width=2, capstyle="round",
+                tags="custom_arrow"
+            )
+
             self._canvas.tag_raise("custom_arrow")
 
             if hasattr(self, "_clicked"):
@@ -258,12 +309,12 @@ class AboutDialog(ctk.CTkToplevel):
 
 
 class WarningDialog(ctk.CTkToplevel):
-    """안내/경고 통일 모달 팝업"""
+    """안내/경고/오류 통일 모달 팝업"""
     def __init__(self, parent, message, app_font, title_text="안내"):
         super().__init__(parent)
 
         self.title("안내")
-        self.geometry("400x220")
+        self.geometry("420x240")
         self.resizable(False, False)
         self.configure(fg_color="#FFFFFF")
 
@@ -273,7 +324,7 @@ class WarningDialog(ctk.CTkToplevel):
         self.update_idletasks()
         pw, ph = parent.winfo_width(), parent.winfo_height()
         px, py = parent.winfo_x(), parent.winfo_y()
-        self.geometry(f"+{px + (pw - 400) // 2}+{py + (ph - 220) // 2}")
+        self.geometry(f"+{px + (pw - 420) // 2}+{py + (ph - 240) // 2}")
 
         self.header_label = ctk.CTkLabel(
             self,
@@ -281,23 +332,25 @@ class WarningDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(family=app_font, size=18, weight="bold"),
             text_color="#191F28"
         )
-        self.header_label.pack(pady=(24, 10))
+        self.header_label.pack(pady=(22, 8))
+
+        justify_mode = "left" if ("-" in message or "•" in message) else "center"
 
         self.body_label = ctk.CTkLabel(
             self,
             text=message,
             font=ctk.CTkFont(family=app_font, size=12),
             text_color="#4E5968",
-            justify="center",
-            wraplength=340
+            justify=justify_mode,
+            wraplength=360
         )
-        self.body_label.pack(expand=True, padx=20, pady=(0, 16))
+        self.body_label.pack(expand=True, padx=24, pady=(0, 14))
 
         self.btn_confirm = ctk.CTkButton(
             self,
             text="확인",
             width=140,
-            height=42,
+            height=40,
             font=ctk.CTkFont(family=app_font, size=13, weight="bold"),
             fg_color="#3182F6",
             hover_color="#1B64DA",
@@ -356,6 +409,84 @@ class SortConflictDialog(ctk.CTkToplevel):
         self.btn_select = ctk.CTkButton(
             btn_frame,
             text="정렬 선택",
+            width=175,
+            height=44,
+            font=ctk.CTkFont(family=app_font, size=13),
+            fg_color="#F2F4F6",
+            hover_color="#E5E8EB",
+            text_color="#333D4B",
+            corner_radius=12,
+            command=self._on_select
+        )
+        self.btn_select.pack(side="left", padx=(0, 8))
+
+        self.btn_proceed = ctk.CTkButton(
+            btn_frame,
+            text="그냥 진행",
+            width=175,
+            height=44,
+            font=ctk.CTkFont(family=app_font, size=13, weight="bold"),
+            fg_color="#3182F6",
+            hover_color="#1B64DA",
+            text_color="#FFFFFF",
+            corner_radius=12,
+            command=self._on_proceed
+        )
+        self.btn_proceed.pack(side="right")
+
+    def _on_select(self):
+        self.result = False
+        self.destroy()
+
+    def _on_proceed(self):
+        self.result = True
+        self.destroy()
+
+
+class SortNoColDialog(ctk.CTkToplevel):
+    """정렬 방식(오름차순/내림차순)은 선택했으나 기준 열을 지정하지 않은 경우 확인 팝업"""
+    def __init__(self, parent, app_font):
+        super().__init__(parent)
+        self.result = False
+
+        self.title("정렬 설정 확인")
+        self.geometry("420x240")
+        self.resizable(False, False)
+        self.configure(fg_color="#FFFFFF")
+
+        self.transient(parent)
+        self.grab_set()
+
+        self.update_idletasks()
+        pw, ph = parent.winfo_width(), parent.winfo_height()
+        px, py = parent.winfo_x(), parent.winfo_y()
+        self.geometry(f"+{px + (pw - 420) // 2}+{py + (ph - 240) // 2}")
+
+        self.header_label = ctk.CTkLabel(
+            self,
+            text="정렬 열 미선택",
+            font=ctk.CTkFont(family=app_font, size=19, weight="bold"),
+            text_color="#191F28"
+        )
+        self.header_label.pack(pady=(24, 8))
+
+        body_text = "데이터 정렬 옵션에서 열을 선택하지 않았습니다.\n그냥 진행할까요?"
+        self.body_label = ctk.CTkLabel(
+            self,
+            text=body_text,
+            font=ctk.CTkFont(family=app_font, size=12),
+            text_color="#4E5968",
+            justify="center",
+            wraplength=360
+        )
+        self.body_label.pack(expand=True, padx=20, pady=(0, 18))
+
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=24, pady=(0, 22))
+
+        self.btn_select = ctk.CTkButton(
+            btn_frame,
+            text="열 선택",
             width=175,
             height=44,
             font=ctk.CTkFont(family=app_font, size=13),
@@ -574,12 +705,12 @@ class ReportMergerApp(ctk.CTk):
         self.configure(fg_color="#F2F4F6")
 
         self.selected_files = []
+        self.cached_columns = []  # 첫 번째 문서의 컬럼(헤더) 목록 캐시
 
         self.save_dir_path = str(Path.home() / "Desktop")
         if not os.path.exists(self.save_dir_path):
             self.save_dir_path = str(Path.home())
 
-        # 타이트하게 크롭된 아이콘 초기화 (13x13px)
         self.icon_reload = create_reload_icon(size=(13, 13), color="#4E5968")
         self.icon_folder = create_folder_icon(size=(13, 13), color="#333D4B")
 
@@ -646,7 +777,6 @@ class ReportMergerApp(ctk.CTk):
         )
         self.file_btn.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        # [목록 비우기] 버튼 (아이콘과 글자 거리 스페이스 1칸 밀착)
         self.clear_btn = ctk.CTkButton(
             self.btn_frame,
             text="목록 비우기",
@@ -745,7 +875,6 @@ class ReportMergerApp(ctk.CTk):
         self.path_entry.insert(0, self.save_dir_path)
         self.path_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        # [폴더 변경] 버튼 (아이콘과 글자 거리 스페이스 1칸 밀착)
         self.path_btn = ctk.CTkButton(
             self.path_frame,
             text="폴더 변경",
@@ -801,8 +930,6 @@ class ReportMergerApp(ctk.CTk):
         self.sort_frame.pack(fill="x", padx=20, pady=(0, 2))
 
         self.sort_col_var = tk.StringVar()
-        self.sort_col_var.trace_add("write", self._on_sort_text_change)
-
         self.sort_col_entry = ctk.CTkEntry(
             self.sort_frame,
             textvariable=self.sort_col_var,
@@ -817,7 +944,12 @@ class ReportMergerApp(ctk.CTk):
         )
         self.sort_col_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        # 아래 화살표(⬇)가 적용된 드롭다운 위젯
+        # 타이핑 즉시 실시간 감지 바인딩
+        self.sort_col_entry.bind("<KeyRelease>", lambda e: self.after(10, self._on_sort_text_change))
+        self.sort_col_entry.bind("<FocusOut>", lambda e: self._on_sort_text_change())
+        self.sort_col_var.trace_add("write", self._on_sort_text_change)
+
+        # 완벽한 좌우 대칭 화살표가 적용된 ModernOptionMenu
         self.sort_order_menu = ModernOptionMenu(
             self.sort_frame,
             values=["정렬 안 함", "오름차순 (1→9, A→Z)", "내림차순 (9→1, Z→A)"],
@@ -836,12 +968,12 @@ class ReportMergerApp(ctk.CTk):
         self.sort_order_menu.set("정렬 안 함")
         self.sort_order_menu.pack(side="right")
 
-        # 실시간 한글 감지 붉은 경고 라벨
+        # 실시간 상태 안내 라벨 (한글 경고: 빨강 / 선택 열 안내: 파랑)
         self.sort_warn_label = ctk.CTkLabel(
             self.content_card,
             text="",
             font=ctk.CTkFont(family=APP_FONT, size=11, weight="bold"),
-            text_color="#FF3B30"
+            text_color="#3182F6"
         )
         self.sort_warn_label.pack(anchor="w", padx=22, pady=(0, 6))
 
@@ -903,13 +1035,64 @@ class ReportMergerApp(ctk.CTk):
         )
         self.disclaimer_label.pack(padx=18, pady=(0, 14))
 
+    def _extract_sample_columns(self):
+        """추가된 문서들에서 컬럼 헤더 목록을 안전하게 분석하여 캐싱"""
+        self.cached_columns = []
+        if not self.selected_files:
+            return
+
+        for f in self.selected_files:
+            cols = extract_columns_from_file(f)
+            if cols:
+                self.cached_columns = cols
+                break
+
     def _on_sort_text_change(self, *args):
-        """한글 입력 실시간 감지 -> 붉은 경고 표시"""
-        val = self.sort_col_var.get()
-        if has_korean(val):
-            self.sort_warn_label.configure(text="영문으로 입력해 주세요")
-        else:
+        """정렬 입력값 실시간 감지 -> 한글 경고(빨강) 또는 선택 열 명칭 안내(파랑)"""
+        # Entry에서 직접 텍스트 취득 (StringVar 동기화 지연 방지)
+        val = self.sort_col_entry.get().strip()
+        if not val:
+            val = self.sort_col_var.get().strip()
+
+        if not val:
             self.sort_warn_label.configure(text="")
+            return
+
+        # 1. 한글 입력 감지 시 빨간색 경고
+        if has_korean(val):
+            self.sort_warn_label.configure(text="영문으로 입력해 주세요", text_color="#FF3B30")
+            return
+
+        # 2. 영문 열 변환 (A -> 0, B -> 1, R -> 17 등)
+        col_idx = excel_col_to_index(val)
+        clean_col = val.upper().replace("열", "")
+
+        if col_idx is not None:
+            if self.cached_columns:
+                if 0 <= col_idx < len(self.cached_columns):
+                    col_name = self.cached_columns[col_idx]
+                    self.sort_warn_label.configure(
+                        text=f"선택하신 {clean_col}열은 “{col_name}” 입니다.",
+                        text_color="#3182F6"
+                    )
+                else:
+                    self.sort_warn_label.configure(
+                        text=f"선택하신 {clean_col}열은 문서의 열 범위를 초과했습니다. (전체 {len(self.cached_columns)}개 열)",
+                        text_color="#8B95A1"
+                    )
+            else:
+                if not self.selected_files:
+                    self.sort_warn_label.configure(
+                        text=f"선택하신 열: {clean_col}열 (취합할 파일을 추가하시면 해당 열의 명칭이 표시됩니다)",
+                        text_color="#3182F6"
+                    )
+                else:
+                    self.sort_warn_label.configure(
+                        text=f"선택하신 열: {clean_col}열",
+                        text_color="#3182F6"
+                    )
+        else:
+            self.sort_warn_label.configure(text="영문 열 문자(예: A, B, Q)로 입력해 주세요", text_color="#FF3B30")
 
     def open_about_dialog(self):
         AboutDialog(self, APP_FONT)
@@ -966,8 +1149,10 @@ class ReportMergerApp(ctk.CTk):
 
     def clear_file_list(self):
         self.selected_files.clear()
+        self.cached_columns.clear()
         self._refresh_listbox()
         self._set_progress(0, "대기 중")
+        self._on_sort_text_change()
 
     def _refresh_listbox(self):
         self.file_listbox.delete(0, tk.END)
@@ -975,6 +1160,9 @@ class ReportMergerApp(ctk.CTk):
             ext = os.path.splitext(f)[1].lower()
             icon = "📦" if ext == ".zip" else "📄"
             self.file_listbox.insert(tk.END, f" {icon}  {os.path.basename(f)}")
+
+        self._extract_sample_columns()
+        self._on_sort_text_change()
 
     def change_directory(self):
         folder = filedialog.askdirectory(initialdir=self.path_entry.get(), title="저장할 폴더 선택")
@@ -1022,6 +1210,16 @@ class ReportMergerApp(ctk.CTk):
                 return
             else:
                 sort_col_input = ""
+
+        # 4) 정렬 방식은 선택했으나 기준 열을 지정하지 않은 경우 확인 팝업
+        if not sort_col_input and sort_order_mode != "정렬 안 함":
+            dlg = SortNoColDialog(self, APP_FONT)
+            self.wait_window(dlg)
+            if not dlg.result:
+                self.sort_col_entry.focus()
+                return
+            else:
+                sort_order_mode = "정렬 안 함"
 
         out_name = self.filename_entry.get().strip()
         if not out_name:
@@ -1173,8 +1371,19 @@ class ReportMergerApp(ctk.CTk):
         except Exception as e:
             self.reset_ui()
             self._set_progress(0, "오류 발생")
-            warn_msg = f"작업 중 오류가 발생했습니다:\n{str(e)}"
-            self.after(0, lambda: WarningDialog(self, warn_msg, APP_FONT, title_text="오류 발생"))
+            err_msg = str(e)
+
+            if "file is not a zip file" in err_msg.lower() or "badzipfile" in err_msg.lower():
+                drm_msg = (
+                    "파일을 확인 할 수 없습니다. 아래 내용을 확인해 주세요.\n\n"
+                    "- DRM 설정 여부.\n"
+                    "- 손상된 파일 여부.\n"
+                    "- 암호 설정 여부."
+                )
+                self.after(0, lambda: WarningDialog(self, drm_msg, APP_FONT, title_text="파일 확인 불가"))
+            else:
+                warn_msg = f"작업 중 오류가 발생했습니다:\n{err_msg}"
+                self.after(0, lambda: WarningDialog(self, warn_msg, APP_FONT, title_text="오류 발생"))
 
     def reset_ui(self):
         self.run_btn.configure(
