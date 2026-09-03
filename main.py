@@ -1,20 +1,90 @@
+import sys
 import os
+import tkinter as tk
+import tkinter.font as tkfont
+
+# ==========================================
+# 1. 중복 실행 방지 (Windows Mutex)
+# ==========================================
+if sys.platform == "win32":
+    import ctypes
+    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "ReportMerger_Mutex_SingleInstance")
+    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        sys.exit(0)
+
+# ==========================================
+# 2. 시스템 최적 서체 감지 (나눔고딕 -> 맑은 고딕)
+# ==========================================
+splash = tk.Tk()
+splash.overrideredirect(True)
+
+# 폰트 패밀리 동적 판별
+available_fonts = [f.lower() for f in tkfont.families()]
+if any("nanumgothic" in f or "나눔고딕" in f for f in available_fonts):
+    APP_FONT = "NanumGothic"
+elif any("malgun" in f or "맑은 고딕" in f for f in available_fonts):
+    APP_FONT = "Malgun Gothic"
+else:
+    APP_FONT = "Segoe UI"
+
+# 스플래시 창 레이아웃
+splash_w, splash_h = 360, 150
+sw = splash.winfo_screenwidth()
+sh = splash.winfo_screenheight()
+sx = (sw - splash_w) // 2
+sy = (sh - splash_h) // 2
+splash.geometry(f"{splash_w}x{splash_h}+{sx}+{sy}")
+splash.configure(bg="#FFFFFF")
+
+splash_card = tk.Frame(splash, bg="#FFFFFF", highlightbackground="#E5E8EB", highlightthickness=1)
+splash_card.pack(fill="both", expand=True)
+
+lbl_splash_title = tk.Label(
+    splash_card,
+    text="문서 통합 프로그램",
+    font=(APP_FONT, 14, "bold"),
+    fg="#191F28",
+    bg="#FFFFFF"
+)
+lbl_splash_title.pack(pady=(28, 6))
+
+lbl_splash_status = tk.Label(
+    splash_card,
+    text="프로그램을 실행 중입니다...",
+    font=(APP_FONT, 11, "bold"),
+    fg="#3182F6",
+    bg="#FFFFFF"
+)
+lbl_splash_status.pack(pady=(0, 4))
+
+lbl_splash_sub = tk.Label(
+    splash_card,
+    text="잠시만 기다려 주세요.",
+    font=(APP_FONT, 10),
+    fg="#8B95A1",
+    bg="#FFFFFF"
+)
+lbl_splash_sub.pack()
+
+splash.update()
+
+# ==========================================
+# 3. 메인 모듈 로드
+# ==========================================
 import tempfile
 import threading
 from pathlib import Path
-import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
 import pandas as pd
 import pyzipper
 
-# 외관 및 테마 설정 (Apple / Toss 미니멀 라이트 모드)
 ctk.set_appearance_mode("Light")
 ctk.set_default_color_theme("blue")
 
 
 class OverwriteDialog(ctk.CTkToplevel):
-    """동일 파일명 존재 시 덮어쓰기 여부를 묻는 팝업 다이얼로그"""
+    """동일 파일명 존재 시 덮어쓰기 여부를 묻는 팝업"""
     def __init__(self, parent, filename):
         super().__init__(parent)
         self.result = False
@@ -24,11 +94,9 @@ class OverwriteDialog(ctk.CTkToplevel):
         self.resizable(False, False)
         self.configure(fg_color="#FFFFFF")
 
-        # 모달 창 설정
         self.transient(parent)
         self.grab_set()
 
-        # 화면 중앙 배치
         self.update_idletasks()
         parent_x = parent.winfo_x()
         parent_y = parent.winfo_y()
@@ -38,28 +106,25 @@ class OverwriteDialog(ctk.CTkToplevel):
         y = parent_y + (parent_h - 210) // 2
         self.geometry(f"+{x}+{y}")
 
-        # 안내 문구
         self.msg_label = ctk.CTkLabel(
             self,
             text=f"저장 경로에 [{filename}] 파일이 이미 존재합니다.\n\n동일한 파일명이 있습니다. 덮어 씌우시겠습니까?",
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=13, weight="bold"),
+            font=ctk.CTkFont(family=APP_FONT, size=13, weight="bold"),
             text_color="#191F28",
             justify="center",
             wraplength=380
         )
         self.msg_label.pack(expand=True, padx=20, pady=(24, 16))
 
-        # 버튼 영역
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(fill="x", padx=24, pady=(0, 24))
 
-        # 1. 예 (덮어쓰기)
         self.btn_yes = ctk.CTkButton(
             btn_frame,
             text="예",
             width=170,
             height=42,
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=13, weight="bold"),
+            font=ctk.CTkFont(family=APP_FONT, size=13, weight="bold"),
             fg_color="#3182F6",
             hover_color="#1B64DA",
             corner_radius=10,
@@ -67,13 +132,12 @@ class OverwriteDialog(ctk.CTkToplevel):
         )
         self.btn_yes.pack(side="left", padx=(0, 10))
 
-        # 2. 파일명을 새로 지정 (취소)
         self.btn_cancel = ctk.CTkButton(
             btn_frame,
             text="파일명을 새로 지정",
             width=170,
             height=42,
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=13),
+            font=ctk.CTkFont(family=APP_FONT, size=13),
             fg_color="#F2F4F6",
             hover_color="#E5E8EB",
             text_color="#333D4B",
@@ -96,15 +160,12 @@ class ReportMergerApp(ctk.CTk):
         super().__init__()
 
         self.title("문서 통합 프로그램")
-        self.geometry("630 x 800")
+        self.geometry("630 x 810")
         self.resizable(False, False)
-        
-        # Apple / Toss 시그니처 연회색 배경
         self.configure(fg_color="#F2F4F6")
 
         self.selected_files = []
         
-        # 기본 저장 경로: 사용자 바탕화면
         self.save_dir_path = str(Path.home() / "Desktop")
         if not os.path.exists(self.save_dir_path):
             self.save_dir_path = str(Path.home())
@@ -113,13 +174,13 @@ class ReportMergerApp(ctk.CTk):
 
     def _init_ui(self):
         # 1. 상단 타이틀 및 안내 카드
-        self.header_card = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=18)
+        self.header_card = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=16)
         self.header_card.pack(fill="x", padx=20, pady=(18, 10))
 
         self.title_label = ctk.CTkLabel(
             self.header_card,
             text="문서 통합 프로그램",
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=21, weight="bold"),
+            font=ctk.CTkFont(family=APP_FONT, size=21, weight="bold"),
             text_color="#191F28"
         )
         self.title_label.pack(anchor="w", padx=22, pady=(18, 8))
@@ -131,24 +192,24 @@ class ReportMergerApp(ctk.CTk):
         self.desc_label = ctk.CTkLabel(
             self.header_card,
             text=guide_text,
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=12),
+            font=ctk.CTkFont(family=APP_FONT, size=12),
             text_color="#4E5968",
             justify="left"
         )
         self.desc_label.pack(anchor="w", padx=22, pady=(0, 18))
 
         # 2. 메인 설정 카드
-        self.content_card = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=18)
+        self.content_card = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=16)
         self.content_card.pack(fill="both", expand=True, padx=20, pady=(0, 12))
 
-        # [섹션 1] 파일 선택 버튼 영역
+        # 파일 선택 영역
         self.btn_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.btn_frame.pack(fill="x", padx=22, pady=(18, 8))
 
         self.file_btn = ctk.CTkButton(
             self.btn_frame,
             text="+ 취합할 파일 추가 (.zip, .xlsx, .csv)",
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=13, weight="bold"),
+            font=ctk.CTkFont(family=APP_FONT, size=13, weight="bold"),
             fg_color="#3182F6",
             hover_color="#1B64DA",
             corner_radius=10,
@@ -160,7 +221,7 @@ class ReportMergerApp(ctk.CTk):
         self.clear_btn = ctk.CTkButton(
             self.btn_frame,
             text="목록 비우기",
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=12),
+            font=ctk.CTkFont(family=APP_FONT, size=12),
             fg_color="#F2F4F6",
             hover_color="#E5E8EB",
             text_color="#4E5968",
@@ -171,7 +232,6 @@ class ReportMergerApp(ctk.CTk):
         )
         self.clear_btn.pack(side="right")
 
-        # 파일 목록 박스
         self.file_listbox = tk.Listbox(
             self.content_card,
             height=5,
@@ -183,24 +243,25 @@ class ReportMergerApp(ctk.CTk):
             highlightbackground="#E5E8EB",
             selectbackground="#E8F3FF",
             selectforeground="#1B64DA",
-            font=("Apple SD Gothic Neo", 10)
+            font=(APP_FONT, 10)
         )
         self.file_listbox.pack(fill="both", expand=True, padx=22, pady=(0, 14))
 
-        # [섹션 2] 저장할 파일명
+        # 저장 파일명
         self.name_label = ctk.CTkLabel(
             self.content_card,
             text="저장할 엑셀 파일 이름",
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=13, weight="bold"),
+            font=ctk.CTkFont(family=APP_FONT, size=13, weight="bold"),
             text_color="#333D4B"
         )
         self.name_label.pack(anchor="w", padx=22, pady=(0, 5))
 
         self.filename_entry = ctk.CTkEntry(
             self.content_card,
+            font=ctk.CTkFont(family=APP_FONT, size=13),
             placeholder_text="통합_보고서.xlsx",
             corner_radius=10,
-            height=38,
+            height=40,
             fg_color="#F9FAFB",
             border_color="#E5E8EB",
             border_width=1,
@@ -209,11 +270,11 @@ class ReportMergerApp(ctk.CTk):
         self.filename_entry.insert(0, "통합_보고서.xlsx")
         self.filename_entry.pack(fill="x", padx=22, pady=(0, 14))
 
-        # [섹션 3] 저장 경로
+        # 저장 경로
         self.path_label = ctk.CTkLabel(
             self.content_card,
             text="저장 위치 (기본값: 바탕화면)",
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=13, weight="bold"),
+            font=ctk.CTkFont(family=APP_FONT, size=13, weight="bold"),
             text_color="#333D4B"
         )
         self.path_label.pack(anchor="w", padx=22, pady=(0, 5))
@@ -223,8 +284,9 @@ class ReportMergerApp(ctk.CTk):
 
         self.path_entry = ctk.CTkEntry(
             self.path_frame,
+            font=ctk.CTkFont(family=APP_FONT, size=13),
             corner_radius=10,
-            height=38,
+            height=40,
             fg_color="#F9FAFB",
             border_color="#E5E8EB",
             border_width=1,
@@ -237,8 +299,8 @@ class ReportMergerApp(ctk.CTk):
             self.path_frame,
             text="폴더 변경",
             width=80,
-            height=38,
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=12),
+            height=40,
+            font=ctk.CTkFont(family=APP_FONT, size=12),
             fg_color="#F2F4F6",
             hover_color="#E5E8EB",
             text_color="#333D4B",
@@ -247,14 +309,14 @@ class ReportMergerApp(ctk.CTk):
         )
         self.path_btn.pack(side="right")
 
-        # [섹션 4] 진행 상황 및 프로그레스 바
+        # 프로그레스 영역
         self.progress_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.progress_frame.pack(fill="x", padx=22, pady=(0, 14))
 
         self.progress_status_label = ctk.CTkLabel(
             self.progress_frame,
             text="대기 중",
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=12),
+            font=ctk.CTkFont(family=APP_FONT, size=12),
             text_color="#8B95A1"
         )
         self.progress_status_label.pack(side="left")
@@ -262,7 +324,7 @@ class ReportMergerApp(ctk.CTk):
         self.progress_percent_label = ctk.CTkLabel(
             self.progress_frame,
             text="0%",
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=12, weight="bold"),
+            font=ctk.CTkFont(family=APP_FONT, size=12, weight="bold"),
             text_color="#3182F6"
         )
         self.progress_percent_label.pack(side="right")
@@ -277,24 +339,24 @@ class ReportMergerApp(ctk.CTk):
         self.progress_bar.set(0)
         self.progress_bar.pack(fill="x", padx=22, pady=(0, 16))
 
-        # 3. 하단 액션 버튼
+        # 3. 하단 CTA 버튼 (가이드 규격 반영: 높이 50px, 라운드 12px, 명도 대비 최적화)
         self.run_btn = ctk.CTkButton(
             self,
             text="문서 취합 시작하기",
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=15, weight="bold"),
+            font=ctk.CTkFont(family=APP_FONT, size=15, weight="bold"),
             fg_color="#3182F6",
             hover_color="#1B64DA",
-            corner_radius=14,
-            height=48,
+            text_color="#FFFFFF",
+            corner_radius=12,
+            height=50,
             command=self.start_merge_thread
         )
-        self.run_btn.pack(fill="x", padx=20, pady=(0, 10))
+        self.run_btn.pack(fill="x", padx=20, pady=(0, 12))
 
-        # 4. 맨 하단 정보 영역 (면책 문구 및 버전/제작자 정보)
+        # 4. 맨 하단 정보 (면책 문구 + 메타데이터)
         self.footer_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.footer_frame.pack(fill="x", padx=22, pady=(0, 14))
 
-        # 좌측: 면책 문구
         disclaimer_text = (
             "본 프로그램은 업무 지원용 도구로 자유로운 수정, 사용 및 배포가 가능합니다.\n"
             "(사용 중 발생하는 모든 문제는 사용자 본인의 책임입니다.)"
@@ -302,18 +364,17 @@ class ReportMergerApp(ctk.CTk):
         self.disclaimer_label = ctk.CTkLabel(
             self.footer_frame,
             text=disclaimer_text,
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=10),
+            font=ctk.CTkFont(family=APP_FONT, size=10),
             text_color="#8B95A1",
             justify="left"
         )
         self.disclaimer_label.pack(side="left")
 
-        # 우측: 최종 정보 (v1.3, 날짜, 제작자)
         meta_text = "최종 버전 : 1.3\n최종 수정 날짜 : 26.09.03\n제작자 : kkh"
         self.meta_label = ctk.CTkLabel(
             self.footer_frame,
             text=meta_text,
-            font=ctk.CTkFont(family="Apple SD Gothic Neo", size=10),
+            font=ctk.CTkFont(family=APP_FONT, size=10),
             text_color="#8B95A1",
             justify="right"
         )
@@ -387,17 +448,20 @@ class ReportMergerApp(ctk.CTk):
 
         out_path = os.path.join(save_dir, out_name)
 
-        # 동일한 파일명이 이미 존재하는지 확인
         if os.path.exists(out_path):
             dlg = OverwriteDialog(self, out_name)
             self.wait_window(dlg)
             if not dlg.result:
-                # '파일명을 새로 지정' 선택 시 입력창에 포커스 후 중단
                 self.filename_entry.focus()
                 return
 
-        # 버튼 문구 변경 (따옴표 없음)
-        self.run_btn.configure(state="disabled", text="데이터 취합 중입니다. 잠시만 기다려주세요.")
+        # 비활성화 및 상태 전환 (가이드라인 준수)
+        self.run_btn.configure(
+            state="disabled",
+            text="데이터 취합 중입니다. 잠시만 기다려주세요.",
+            fg_color="#F2F4F6",
+            text_color="#8B95A1"
+        )
         self._set_progress(0, "취합 준비 중...")
 
         threading.Thread(target=self.process_merge, args=(out_path,), daemon=True).start()
@@ -442,7 +506,6 @@ class ReportMergerApp(ctk.CTk):
                             if f_ext in [".xlsx", ".xls", ".csv"]:
                                 excel_files_to_read.append(os.path.join(root, file))
 
-                # 일반 파일 추가
                 excel_files_to_read.extend(direct_files)
 
                 total_docs = len(excel_files_to_read)
@@ -451,7 +514,7 @@ class ReportMergerApp(ctk.CTk):
                     messagebox.showwarning("경고", "취합할 수 있는 유효한 엑셀 또는 CSV 데이터가 없습니다.")
                     return
 
-                # 2단계: 데이터프레임 읽기 (30% ~ 85%)
+                # 2단계: 파일 읽기 (30% ~ 85%)
                 for idx, file_path in enumerate(excel_files_to_read):
                     read_percent = 30 + int(((idx + 1) / total_docs) * 55)
                     self._set_progress(read_percent, f"문서 데이터 분석 중 ({idx + 1}/{total_docs})...")
@@ -473,7 +536,7 @@ class ReportMergerApp(ctk.CTk):
                         df.columns = df.columns.astype(str).str.strip()
                         dataframes.append(df)
 
-                # 3단계: 동일 컬럼 기준 병합 및 저장 (85% ~ 100%)
+                # 3단계: 동일 컬럼 병합 및 저장 (85% ~ 100%)
                 self._set_progress(90, "데이터 컬럼 매핑 및 엑셀 파일 생성 중...")
                 merged_df = pd.concat(dataframes, ignore_index=True, sort=False)
                 merged_df.to_excel(out_path, index=False, engine="openpyxl")
@@ -494,9 +557,15 @@ class ReportMergerApp(ctk.CTk):
             messagebox.showerror("오류 발생", f"작업 중 오류가 발생했습니다:\n{str(e)}")
 
     def reset_ui(self):
-        self.run_btn.configure(state="normal", text="문서 취합 시작하기")
+        self.run_btn.configure(
+            state="normal",
+            text="문서 취합 시작하기",
+            fg_color="#3182F6",
+            text_color="#FFFFFF"
+        )
 
 
 if __name__ == "__main__":
+    splash.destroy()
     app = ReportMergerApp()
     app.mainloop()
