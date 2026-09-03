@@ -20,11 +20,32 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install customtkinter pandas openpyxl xlrd pyzipper pyinstaller
+        pip install customtkinter pandas openpyxl xlrd pyzipper pyinstaller pillow
+
+    - name: Generate Splash Image
+      run: |
+        curl -s -L -o NanumGothicBold.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/nanumgothic/NanumGothic-Bold.ttf"
+        python -c "
+        from PIL import Image, ImageDraw, ImageFont
+        w, h = 400, 170
+        img = Image.new('RGB', (w, h), (255, 255, 255))
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle([0, 0, w-1, h-1], radius=16, outline=(229, 232, 235), width=2)
+        try:
+            f_title = ImageFont.truetype('NanumGothicBold.ttf', 18)
+            f_status = ImageFont.truetype('NanumGothicBold.ttf', 14)
+            f_sub = ImageFont.truetype('NanumGothicBold.ttf', 11)
+        except:
+            f_title = f_status = f_sub = None
+        draw.text((200, 42), '문서 통합 프로그램', font=f_title, fill=(25, 31, 40), anchor='mm')
+        draw.text((200, 84), '프로그램을 실행 중입니다...', font=f_status, fill=(49, 130, 246), anchor='mm')
+        draw.text((200, 122), '잠시만 기다려 주세요.', font=f_sub, fill=(139, 149, 161), anchor='mm')
+        img.save('splash.png')
+        "
 
     - name: Build with PyInstaller
       run: |
-        pyinstaller --noconsole --onefile --collect-all customtkinter --name "ReportMerger" main.py
+        pyinstaller --noconsole --onefile --splash splash.png --collect-all customtkinter --name "ReportMerger" main.py
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
