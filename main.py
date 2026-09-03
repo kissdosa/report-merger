@@ -65,7 +65,54 @@ def excel_col_to_index(col_str):
 
 
 # ==========================================
-# 3. 디자인 가이드 적용 모달 팝업들
+# 3. 툴팁 (Tooltip) 헬퍼 클래스
+# ==========================================
+class ToolTip:
+    """원형 물음표(?) 마우스 호버 시 팝업되는 카드형 툴팁"""
+    def __init__(self, widget, text, font_family):
+        self.widget = widget
+        self.text = text
+        self.font_family = font_family
+        self.tip_window = None
+
+        self.widget.bind("<Enter>", self.show_tip)
+        self.widget.bind("<Leave>", self.hide_tip)
+        if hasattr(self.widget, "_label"):
+            self.widget._label.bind("<Enter>", self.show_tip)
+            self.widget._label.bind("<Leave>", self.hide_tip)
+
+    def show_tip(self, event=None):
+        if self.tip_window or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 22
+        y = self.widget.winfo_rooty() - 8
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        tw.attributes("-topmost", True)
+
+        frame = tk.Frame(tw, bg="#191F28", padx=10, pady=6)
+        frame.pack()
+
+        label = tk.Label(
+            frame,
+            text=self.text,
+            font=(self.font_family, 10),
+            fg="#FFFFFF",
+            bg="#191F28",
+            justify="left",
+            wraplength=320
+        )
+        label.pack()
+
+    def hide_tip(self, event=None):
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
+
+
+# ==========================================
+# 4. 디자인 가이드 적용 모달 팝업들
 # ==========================================
 class AboutDialog(ctk.CTkToplevel):
     """우측 상단 제품 정보 안내 팝업"""
@@ -181,7 +228,7 @@ class SortConflictDialog(ctk.CTkToplevel):
     """정렬 열을 입력했으나 '정렬 안 함'인 경우 확인 팝업"""
     def __init__(self, parent, col_name, app_font):
         super().__init__(parent)
-        self.result = False  # False: 정렬 선택, True: 그냥 진행
+        self.result = False
 
         self.title("정렬 설정 확인")
         self.geometry("420x240")
@@ -429,7 +476,7 @@ class CompleteDialog(ctk.CTkToplevel):
 
 
 # ==========================================
-# 4. 메인 애플리케이션
+# 5. 메인 애플리케이션
 # ==========================================
 class ReportMergerApp(ctk.CTk):
     def __init__(self):
@@ -437,8 +484,8 @@ class ReportMergerApp(ctk.CTk):
 
         self.title("엑셀 문서 자동 취합 프로그램")
         
-        self.geometry("540 x 890")
-        self.minsize(480, 760)
+        self.geometry("540 x 830")
+        self.minsize(480, 720)
         self.resizable(True, True)
         self.configure(fg_color="#F2F4F6")
 
@@ -564,23 +611,35 @@ class ReportMergerApp(ctk.CTk):
         self.filename_entry.insert(0, "통합_보고서.xlsx")
         self.filename_entry.pack(fill="x", padx=20, pady=(0, 10))
 
-        # 저장 위치 (제목 및 작은 글씨 서브 문구)
+        # ==========================================
+        # [섹션] 저장 위치 (호버 툴팁 물음표 아이콘 적용)
+        # ==========================================
+        self.path_header_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
+        self.path_header_frame.pack(fill="x", padx=20, pady=(0, 4))
+
         self.path_title_label = ctk.CTkLabel(
-            self.content_card,
+            self.path_header_frame,
             text="저장 위치",
             font=ctk.CTkFont(family=APP_FONT, size=12, weight="bold"),
             text_color="#333D4B"
         )
-        self.path_title_label.pack(anchor="w", padx=20, pady=(0, 2))
+        self.path_title_label.pack(side="left")
 
-        self.path_desc_label = ctk.CTkLabel(
-            self.content_card,
-            text="- 기본 값은 바탕화면으로 설정되어 있습니다. 변경을 원하시면 폴더 변경을 눌러 선택해주세요.",
-            font=ctk.CTkFont(family=APP_FONT, size=11),
-            text_color="#8B95A1",
-            justify="left"
+        # 원형 물음표(?) 아이콘
+        self.path_tooltip_btn = ctk.CTkLabel(
+            self.path_header_frame,
+            text="?",
+            width=18,
+            height=18,
+            corner_radius=9,
+            fg_color="#E5E8EB",
+            text_color="#6B7280",
+            font=ctk.CTkFont(family=APP_FONT, size=11, weight="bold")
         )
-        self.path_desc_label.pack(anchor="w", padx=20, pady=(0, 4))
+        self.path_tooltip_btn.pack(side="left", padx=(6, 0))
+
+        path_tip_text = "기본 값은 바탕화면으로 설정되어 있습니다.\n변경을 원하시면 폴더 변경을 눌러 선택해주세요."
+        ToolTip(self.path_tooltip_btn, path_tip_text, APP_FONT)
 
         self.path_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.path_frame.pack(fill="x", padx=20, pady=(0, 10))
@@ -612,23 +671,44 @@ class ReportMergerApp(ctk.CTk):
         )
         self.path_btn.pack(side="right")
 
-        # 데이터 정렬 옵션 (제목 및 작은 글씨 서브 문구)
+        # ==========================================
+        # [섹션] 데이터 정렬 옵션 (핑크색 '(선택)' + 툴팁 물음표 아이콘)
+        # ==========================================
+        self.sort_header_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
+        self.sort_header_frame.pack(fill="x", padx=20, pady=(0, 4))
+
         self.sort_title_label = ctk.CTkLabel(
-            self.content_card,
+            self.sort_header_frame,
             text="데이터 정렬 옵션",
             font=ctk.CTkFont(family=APP_FONT, size=12, weight="bold"),
             text_color="#333D4B"
         )
-        self.sort_title_label.pack(anchor="w", padx=20, pady=(0, 2))
+        self.sort_title_label.pack(side="left")
 
-        self.sort_desc_label = ctk.CTkLabel(
-            self.content_card,
-            text="* 선택 사항 입니다. 미선택시 별도의 정렬은 진행되지 않습니다.",
-            font=ctk.CTkFont(family=APP_FONT, size=11),
-            text_color="#8B95A1",
-            justify="left"
+        # 핑크색 (선택) 텍스트
+        self.sort_opt_badge = ctk.CTkLabel(
+            self.sort_header_frame,
+            text="(선택)",
+            font=ctk.CTkFont(family=APP_FONT, size=11, weight="bold"),
+            text_color="#F04452"  # Apple/Toss 핑크/코랄 컬러
         )
-        self.sort_desc_label.pack(anchor="w", padx=20, pady=(0, 4))
+        self.sort_opt_badge.pack(side="left", padx=(6, 0))
+
+        # 원형 물음표(?) 아이콘
+        self.sort_tooltip_btn = ctk.CTkLabel(
+            self.sort_header_frame,
+            text="?",
+            width=18,
+            height=18,
+            corner_radius=9,
+            fg_color="#E5E8EB",
+            text_color="#6B7280",
+            font=ctk.CTkFont(family=APP_FONT, size=11, weight="bold")
+        )
+        self.sort_tooltip_btn.pack(side="left", padx=(6, 0))
+
+        sort_tip_text = "선택 사항입니다. 미선택 시 별도의 정렬은 진행되지 않습니다."
+        ToolTip(self.sort_tooltip_btn, sort_tip_text, APP_FONT)
 
         self.sort_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.sort_frame.pack(fill="x", padx=20, pady=(0, 2))
@@ -849,10 +929,8 @@ class ReportMergerApp(ctk.CTk):
             dlg = SortConflictDialog(self, sort_col_input, APP_FONT)
             self.wait_window(dlg)
             if not dlg.result:
-                # "정렬 선택" 클릭 시 중단하고 정렬 메뉴에 집중
                 return
             else:
-                # "그냥 진행" 클릭 시 정렬 없이 취합 진행
                 sort_col_input = ""
 
         out_name = self.filename_entry.get().strip()
