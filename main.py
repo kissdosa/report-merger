@@ -179,13 +179,13 @@ class ModernOptionMenu(ctk.CTkOptionMenu):
                 fill="#4E5968", width=2, capstyle="round",
                 tags="custom_arrow"
             )
-            # 2. 좌측 날개 (독립 선분으로 그려 왜곡/클리핑 원천 방지)
+            # 2. 좌측 날개 (독립 선분 렌더링)
             self._canvas.create_line(
                 cx - 4, cy, cx, cy + 4,
                 fill="#4E5968", width=2, capstyle="round",
                 tags="custom_arrow"
             )
-            # 3. 우측 날개 (좌측과 완벽한 정수 대칭)
+            # 3. 우측 날개 (좌측과 완벽 대칭)
             self._canvas.create_line(
                 cx + 4, cy, cx, cy + 4,
                 fill="#4E5968", width=2, capstyle="round",
@@ -705,7 +705,7 @@ class ReportMergerApp(ctk.CTk):
         self.configure(fg_color="#F2F4F6")
 
         self.selected_files = []
-        self.cached_columns = []  # 첫 번째 문서의 컬럼(헤더) 목록 캐시
+        self.cached_columns = []
 
         self.save_dir_path = str(Path.home() / "Desktop")
         if not os.path.exists(self.save_dir_path):
@@ -718,7 +718,7 @@ class ReportMergerApp(ctk.CTk):
         self._setup_drag_and_drop()
 
     def _init_ui(self):
-        # 1. 상단 타이틀 카드 (우측 상단 제품 정보 버튼)
+        # 1. 상단 타이틀 카드
         self.header_card = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=16)
         self.header_card.pack(fill="x", padx=16, pady=(16, 8))
 
@@ -761,7 +761,7 @@ class ReportMergerApp(ctk.CTk):
         self.content_card = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=16)
         self.content_card.pack(fill="both", expand=True, padx=16, pady=(0, 10))
 
-        # 파일 선택 및 목록 비우기
+        # 파일 선택 및 목록 비우기 버튼
         self.btn_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.btn_frame.pack(fill="x", padx=20, pady=(16, 6))
 
@@ -808,6 +808,19 @@ class ReportMergerApp(ctk.CTk):
             font=(APP_FONT, 10)
         )
         self.file_listbox.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+
+        # [신규] 박스 정중앙 드래그 앤 드롭 안내 문구 라벨
+        placeholder_text = "위의 추가 버튼을 클릭하거나, 취합할 파일을 이곳으로 드래그 앤 드롭해 주세요.."
+        self.placeholder_label = tk.Label(
+            self.file_listbox,
+            text=placeholder_text,
+            font=(APP_FONT, 10),
+            fg="#8B95A1",
+            bg="#F9FAFB",
+            cursor="hand2"
+        )
+        self.placeholder_label.place(relx=0.5, rely=0.5, anchor="center")
+        self.placeholder_label.bind("<Button-1>", lambda e: self.select_files())
 
         # 저장 파일명
         self.name_label = ctk.CTkLabel(
@@ -944,12 +957,10 @@ class ReportMergerApp(ctk.CTk):
         )
         self.sort_col_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        # 타이핑 즉시 실시간 감지 바인딩
         self.sort_col_entry.bind("<KeyRelease>", lambda e: self.after(10, self._on_sort_text_change))
         self.sort_col_entry.bind("<FocusOut>", lambda e: self._on_sort_text_change())
         self.sort_col_var.trace_add("write", self._on_sort_text_change)
 
-        # 완벽한 좌우 대칭 화살표가 적용된 ModernOptionMenu
         self.sort_order_menu = ModernOptionMenu(
             self.sort_frame,
             values=["정렬 안 함", "오름차순 (1→9, A→Z)", "내림차순 (9→1, Z→A)"],
@@ -1021,19 +1032,21 @@ class ReportMergerApp(ctk.CTk):
         )
         self.run_btn.pack(fill="x", padx=16, pady=(0, 10))
 
-        # 4. 맨 하단 면책 문구 (11pt)
+        # 4. 맨 하단 면책 문구 (요청 문구로 교체 및 최적 줄바꿈)
         disclaimer_text = (
-            "본 프로그램은 업무 지원용 도구로 자유로운 수정, 사용 및 배포가 가능합니다.\n"
-            "(사용 중 발생하는 모든 문제는 사용자 본인의 책임입니다.)"
+            "본 프로그램은 업무 지원을 목적으로 제공되는 도구입니다. "
+            "사용자는 본 프로그램을 자유롭게 수정·사용·배포할 수 있으며, "
+            "프로그램의 사용으로 인해 발생하는 모든 문제 및 손해에 대한 책임은 사용자에게 있습니다."
         )
         self.disclaimer_label = ctk.CTkLabel(
             self,
             text=disclaimer_text,
-            font=ctk.CTkFont(family=APP_FONT, size=11),
+            font=ctk.CTkFont(family=APP_FONT, size=10),
             text_color="#8B95A1",
-            justify="center"
+            justify="center",
+            wraplength=490
         )
-        self.disclaimer_label.pack(padx=18, pady=(0, 14))
+        self.disclaimer_label.pack(padx=16, pady=(0, 14))
 
     def _extract_sample_columns(self):
         """추가된 문서들에서 컬럼 헤더 목록을 안전하게 분석하여 캐싱"""
@@ -1049,7 +1062,6 @@ class ReportMergerApp(ctk.CTk):
 
     def _on_sort_text_change(self, *args):
         """정렬 입력값 실시간 감지 -> 한글 경고(빨강) 또는 선택 열 명칭 안내(파랑)"""
-        # Entry에서 직접 텍스트 취득 (StringVar 동기화 지연 방지)
         val = self.sort_col_entry.get().strip()
         if not val:
             val = self.sort_col_var.get().strip()
@@ -1058,12 +1070,10 @@ class ReportMergerApp(ctk.CTk):
             self.sort_warn_label.configure(text="")
             return
 
-        # 1. 한글 입력 감지 시 빨간색 경고
         if has_korean(val):
             self.sort_warn_label.configure(text="영문으로 입력해 주세요", text_color="#FF3B30")
             return
 
-        # 2. 영문 열 변환 (A -> 0, B -> 1, R -> 17 등)
         col_idx = excel_col_to_index(val)
         clean_col = val.upper().replace("열", "")
 
@@ -1098,7 +1108,7 @@ class ReportMergerApp(ctk.CTk):
         AboutDialog(self, APP_FONT)
 
     def _setup_drag_and_drop(self):
-        """Tkinter 메인 루프 충돌 방지 안전한 드래그 앤 드롭"""
+        """Tkinter 메인 루프 충돌 방지 안전한 드래그 앤 드롭 (박스 및 안내 텍스트 모두 바인딩)"""
         try:
             import windnd
 
@@ -1106,6 +1116,7 @@ class ReportMergerApp(ctk.CTk):
                 self.after(10, self._process_dropped_files, files)
 
             windnd.hook_dropfiles(self.file_listbox, func=on_drop)
+            windnd.hook_dropfiles(self.placeholder_label, func=on_drop)
         except Exception:
             pass
 
@@ -1156,10 +1167,16 @@ class ReportMergerApp(ctk.CTk):
 
     def _refresh_listbox(self):
         self.file_listbox.delete(0, tk.END)
-        for f in self.selected_files:
-            ext = os.path.splitext(f)[1].lower()
-            icon = "📦" if ext == ".zip" else "📄"
-            self.file_listbox.insert(tk.END, f" {icon}  {os.path.basename(f)}")
+
+        # 파일 유무에 따라 박스 중앙 안내 문구 표시/숨김
+        if not self.selected_files:
+            self.placeholder_label.place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            self.placeholder_label.place_forget()
+            for f in self.selected_files:
+                ext = os.path.splitext(f)[1].lower()
+                icon = "📦" if ext == ".zip" else "📄"
+                self.file_listbox.insert(tk.END, f" {icon}  {os.path.basename(f)}")
 
         self._extract_sample_columns()
         self._on_sort_text_change()
@@ -1186,7 +1203,6 @@ class ReportMergerApp(ctk.CTk):
         self.after(0, update)
 
     def start_merge_thread(self):
-        # 1) 파일 미선택 시 디자인 가이드 통일 모달 팝업 호출
         if not self.selected_files:
             warn_msg = "병합할 파일(.zip 또는 엑셀 문서)을\n먼저 추가해 주세요."
             WarningDialog(self, warn_msg, APP_FONT, title_text="파일 선택 안내")
@@ -1195,14 +1211,12 @@ class ReportMergerApp(ctk.CTk):
         sort_col_input = self.sort_col_entry.get().strip()
         sort_order_mode = self.sort_order_menu.get()
 
-        # 2) 한글 입력 검사 -> 팝업 후 중단
         if sort_col_input and has_korean(sort_col_input):
             warn_msg = "데이터 정렬 값을 영문으로 표시해 주세요.\n(A열을 정렬하고 싶으면 A, B열을 정렬하고 싶으면 B 등)"
             WarningDialog(self, warn_msg, APP_FONT, title_text="정렬 입력 안내")
             self.sort_col_entry.focus()
             return
 
-        # 3) 열 입력은 하였으나 '정렬 안 함'인 경우 확인 팝업
         if sort_col_input and sort_order_mode == "정렬 안 함":
             dlg = SortConflictDialog(self, sort_col_input, APP_FONT)
             self.wait_window(dlg)
@@ -1211,7 +1225,6 @@ class ReportMergerApp(ctk.CTk):
             else:
                 sort_col_input = ""
 
-        # 4) 정렬 방식은 선택했으나 기준 열을 지정하지 않은 경우 확인 팝업
         if not sort_col_input and sort_order_mode != "정렬 안 함":
             dlg = SortNoColDialog(self, APP_FONT)
             self.wait_window(dlg)
@@ -1266,7 +1279,6 @@ class ReportMergerApp(ctk.CTk):
                 zip_files = [f for f in self.selected_files if os.path.splitext(f)[1].lower() == ".zip"]
                 direct_files = [f for f in self.selected_files if os.path.splitext(f)[1].lower() in [".xlsx", ".xls", ".csv"]]
 
-                # 1단계: 압축 해제 (0% ~ 30%)
                 for idx, zip_path in enumerate(zip_files):
                     current_percent = int((idx / max(1, len(zip_files))) * 30)
                     self._set_progress(current_percent, f"압축 해제 중 ({idx + 1}/{len(zip_files)})...")
@@ -1307,7 +1319,6 @@ class ReportMergerApp(ctk.CTk):
                     WarningDialog(self, warn_msg, APP_FONT, title_text="데이터 없음")
                     return
 
-                # 2단계: 데이터 로드 (30% ~ 80%)
                 for idx, file_path in enumerate(excel_files_to_read):
                     read_percent = 30 + int(((idx + 1) / total_docs) * 50)
                     self._set_progress(read_percent, f"문서 데이터 분석 중 ({idx + 1}/{total_docs})...")
@@ -1329,11 +1340,9 @@ class ReportMergerApp(ctk.CTk):
                         df.columns = df.columns.astype(str).str.strip()
                         dataframes.append(df)
 
-                # 3단계: 통합 및 데이터 정렬 (80% ~ 100%)
                 self._set_progress(85, "데이터 컬럼 매핑 중...")
                 merged_df = pd.concat(dataframes, ignore_index=True, sort=False)
 
-                # 정렬 로직 적용
                 if sort_col_input and sort_order_mode != "정렬 안 함":
                     self._set_progress(90, "설정된 기준 열로 데이터 정렬 중...")
                     target_col = None
