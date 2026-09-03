@@ -47,7 +47,7 @@ APP_FONT = get_system_font()
 
 
 # ==========================================
-# 3. 디자인 가이드 적용 팝업 모달
+# 3. 디자인 가이드 적용 모달 팝업
 # ==========================================
 class OverwriteDialog(ctk.CTkToplevel):
     """동일 파일명 존재 시 덮어쓰기 여부를 묻는 모달 팝업"""
@@ -226,9 +226,9 @@ class ReportMergerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("문서 통합 프로그램")
+        self.title("엑셀 문서 자동 취합 프로그램")
         
-        # 슬림한 가로 너비(520px) 및 자유로운 크기 조절
+        # 슬림한 가로 너비(520px) 및 자유로운 크기 조절 허용
         self.geometry("520 x 780")
         self.minsize(450, 680)
         self.resizable(True, True)
@@ -241,6 +241,7 @@ class ReportMergerApp(ctk.CTk):
             self.save_dir_path = str(Path.home())
 
         self._init_ui()
+        self._setup_drag_and_drop()
 
     def _init_ui(self):
         # 1. 상단 안내 카드
@@ -249,20 +250,17 @@ class ReportMergerApp(ctk.CTk):
 
         self.title_label = ctk.CTkLabel(
             self.header_card,
-            text="문서 통합 프로그램",
+            text="엑셀 문서 자동 취합 프로그램",
             font=ctk.CTkFont(family=APP_FONT, size=20, weight="bold"),
             text_color="#191F28"
         )
         self.title_label.pack(anchor="w", padx=20, pady=(16, 6))
 
-        guide_text = (
-            "• 다수의 엑셀 문서 및 압축 파일(.zip) 내 데이터를 컬럼 기준으로 자동 병합합니다.\n"
-            "• 문서 간 컬럼이 서로 다른 경우, 전체 컬럼 항목을 기준으로 일치하는 데이터를 누락 없이 정렬하여 취합합니다."
-        )
+        guide_text = "• 다수의 엑셀 문서 및 압축 파일(.zip) 내 데이터를 컬럼 기준으로 자동 병합합니다."
         self.desc_label = ctk.CTkLabel(
             self.header_card,
             text=guide_text,
-            font=ctk.CTkFont(family=APP_FONT, size=11),
+            font=ctk.CTkFont(family=APP_FONT, size=12),
             text_color="#4E5968",
             justify="left"
         )
@@ -302,6 +300,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.clear_btn.pack(side="right")
 
+        # 파일 목록 박스 (드래그 앤 드롭 타깃)
         self.file_listbox = tk.Listbox(
             self.content_card,
             height=5,
@@ -423,7 +422,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.run_btn.pack(fill="x", padx=16, pady=(0, 10))
 
-        # 4. 맨 하단 정보 (면책 문구 + 메타데이터)
+        # 4. 맨 하단 정보 (면책 문구 및 버전/제작자 정보 - 폰트 크기 11pt로 확대)
         self.footer_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.footer_frame.pack(fill="x", padx=18, pady=(0, 12))
 
@@ -434,21 +433,48 @@ class ReportMergerApp(ctk.CTk):
         self.disclaimer_label = ctk.CTkLabel(
             self.footer_frame,
             text=disclaimer_text,
-            font=ctk.CTkFont(family=APP_FONT, size=9),
+            font=ctk.CTkFont(family=APP_FONT, size=11),
             text_color="#8B95A1",
             justify="left"
         )
         self.disclaimer_label.pack(side="left")
 
-        meta_text = "최종 버전 : 1.3\n최종 수정 날짜 : 26.09.03\n제작자 : kkh"
+        meta_text = "최종 버전 : 1.4\n최종 수정 날짜 : 26.09.03\n제작자 : kkh"
         self.meta_label = ctk.CTkLabel(
             self.footer_frame,
             text=meta_text,
-            font=ctk.CTkFont(family=APP_FONT, size=9),
+            font=ctk.CTkFont(family=APP_FONT, size=11),
             text_color="#8B95A1",
             justify="right"
         )
         self.meta_label.pack(side="right")
+
+    def _setup_drag_and_drop(self):
+        """Windows 파일 드래그 앤 드롭 연동"""
+        try:
+            import windnd
+
+            def on_drop_files(file_paths):
+                added_count = 0
+                for path in file_paths:
+                    if isinstance(path, bytes):
+                        try:
+                            path = path.decode("utf-8")
+                        except UnicodeDecodeError:
+                            path = path.decode("cp949", errors="ignore")
+
+                    ext = os.path.splitext(path)[1].lower()
+                    if ext in [".zip", ".xlsx", ".xls", ".csv"]:
+                        if path not in self.selected_files:
+                            self.selected_files.append(path)
+                            added_count += 1
+
+                if added_count > 0:
+                    self._refresh_listbox()
+
+            windnd.hook_dropfiles(self.file_listbox, func=on_drop_files)
+        except Exception:
+            pass
 
     def select_files(self):
         files = filedialog.askopenfilenames(
@@ -631,7 +657,7 @@ class ReportMergerApp(ctk.CTk):
 
 
 if __name__ == "__main__":
-    # PyInstaller 부트로더 스플래시 종료 (즉시 메인 윈도우로 전환)
+    # PyInstaller 부트로더 스플래시 창 종료 후 메인 윈도우 전환
     try:
         import pyi_splash
         pyi_splash.close()
