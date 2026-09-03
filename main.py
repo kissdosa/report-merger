@@ -65,10 +65,62 @@ def excel_col_to_index(col_str):
 
 
 # ==========================================
-# 3. 툴팁 (Tooltip) 헬퍼 클래스
+# 3. 애플/토스 스타일 커스텀 꺾쇠(Chevron) OptionMenu
+# ==========================================
+class ModernOptionMenu(ctk.CTkOptionMenu):
+    """기본 역삼각형을 숨기고 첨부 이미지 스타일의 슬림한 꺾쇠(Chevron)를 렌더링하는 위젯"""
+    def _draw(self, no_color_updates=False):
+        super()._draw(no_color_updates)
+        try:
+            # 기본 투박한 역삼각형 숨김 처리
+            self._canvas.itemconfigure("dropdown_arrow", state="hidden")
+            
+            coords = self._canvas.coords("dropdown_arrow")
+            if coords and len(coords) >= 6:
+                # 기본 화살표의 정중앙 좌표 계산
+                cx = (min(coords[0], coords[2], coords[4]) + max(coords[0], coords[2], coords[4])) / 2
+                cy = (min(coords[1], coords[3], coords[5]) + max(coords[1], coords[3], coords[5])) / 2
+                
+                # 미니멀 꺾쇠(Chevron) 좌표 계산 (너비 10px, 높이 6px)
+                w, h = 5, 3
+                chevron_coords = [cx - w, cy - h, cx, cy + h, cx + w, cy - h]
+                
+                if self._canvas.find_withtag("custom_chevron"):
+                    self._canvas.coords("custom_chevron", *chevron_coords)
+                    self._canvas.itemconfigure(
+                        "custom_chevron",
+                        fill="#6B7280",
+                        width=2,
+                        capstyle="round",
+                        joinstyle="round"
+                    )
+                else:
+                    self._canvas.create_line(
+                        chevron_coords,
+                        fill="#6B7280",
+                        width=2,
+                        capstyle="round",
+                        joinstyle="round",
+                        tags="custom_chevron"
+                    )
+                self._canvas.tag_raise("custom_chevron")
+                
+                # 마우스 호버 및 클릭 이벤트 연동
+                if hasattr(self, "_clicked"):
+                    self._canvas.tag_bind("custom_chevron", "<Button-1>", self._clicked)
+                if hasattr(self, "_on_enter"):
+                    self._canvas.tag_bind("custom_chevron", "<Enter>", self._on_enter)
+                if hasattr(self, "_on_leave"):
+                    self._canvas.tag_bind("custom_chevron", "<Leave>", self._on_leave)
+        except Exception:
+            pass
+
+
+# ==========================================
+# 4. 툴팁 (Tooltip) 헬퍼 클래스
 # ==========================================
 class ToolTip:
-    """원형 물음표(?) 마우스 호버 시 팝업되는 카드형 툴팁"""
+    """원형 물음표(?) 호버 시 한 줄로 출력되는 카드형 툴팁"""
     def __init__(self, widget, text, font_family):
         self.widget = widget
         self.text = text
@@ -84,24 +136,23 @@ class ToolTip:
     def show_tip(self, event=None):
         if self.tip_window or not self.text:
             return
-        x = self.widget.winfo_rootx() + 22
-        y = self.widget.winfo_rooty() - 8
+        x = self.widget.winfo_rootx() + 18
+        y = self.widget.winfo_rooty() - 6
         self.tip_window = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
         tw.attributes("-topmost", True)
 
-        frame = tk.Frame(tw, bg="#191F28", padx=10, pady=6)
+        frame = tk.Frame(tw, bg="#191F28", padx=8, pady=4)
         frame.pack()
 
         label = tk.Label(
             frame,
             text=self.text,
-            font=(self.font_family, 10),
+            font=(self.font_family, 9),
             fg="#FFFFFF",
             bg="#191F28",
-            justify="left",
-            wraplength=320
+            justify="left"
         )
         label.pack()
 
@@ -112,7 +163,7 @@ class ToolTip:
 
 
 # ==========================================
-# 4. 디자인 가이드 적용 모달 팝업들
+# 5. 디자인 가이드 적용 모달 팝업들
 # ==========================================
 class AboutDialog(ctk.CTkToplevel):
     """우측 상단 제품 정보 안내 팝업"""
@@ -476,7 +527,7 @@ class CompleteDialog(ctk.CTkToplevel):
 
 
 # ==========================================
-# 5. 메인 애플리케이션
+# 6. 메인 애플리케이션
 # ==========================================
 class ReportMergerApp(ctk.CTk):
     def __init__(self):
@@ -611,9 +662,7 @@ class ReportMergerApp(ctk.CTk):
         self.filename_entry.insert(0, "통합_보고서.xlsx")
         self.filename_entry.pack(fill="x", padx=20, pady=(0, 10))
 
-        # ==========================================
-        # [섹션] 저장 위치 (호버 툴팁 물음표 아이콘 적용)
-        # ==========================================
+        # 저장 위치 (호버 툴팁 물음표 아이콘)
         self.path_header_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.path_header_frame.pack(fill="x", padx=20, pady=(0, 4))
 
@@ -625,20 +674,19 @@ class ReportMergerApp(ctk.CTk):
         )
         self.path_title_label.pack(side="left")
 
-        # 원형 물음표(?) 아이콘
         self.path_tooltip_btn = ctk.CTkLabel(
             self.path_header_frame,
             text="?",
-            width=18,
-            height=18,
-            corner_radius=9,
+            width=14,
+            height=14,
+            corner_radius=7,
             fg_color="#E5E8EB",
             text_color="#6B7280",
-            font=ctk.CTkFont(family=APP_FONT, size=11, weight="bold")
+            font=ctk.CTkFont(family=APP_FONT, size=9, weight="bold")
         )
-        self.path_tooltip_btn.pack(side="left", padx=(6, 0))
+        self.path_tooltip_btn.pack(side="left", padx=(5, 0))
 
-        path_tip_text = "기본 값은 바탕화면으로 설정되어 있습니다.\n변경을 원하시면 폴더 변경을 눌러 선택해주세요."
+        path_tip_text = "기본 값은 바탕화면으로 설정되어 있습니다. 변경을 원하시면 폴더 변경을 눌러 선택해주세요."
         ToolTip(self.path_tooltip_btn, path_tip_text, APP_FONT)
 
         self.path_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
@@ -671,9 +719,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.path_btn.pack(side="right")
 
-        # ==========================================
-        # [섹션] 데이터 정렬 옵션 (핑크색 '(선택)' + 툴팁 물음표 아이콘)
-        # ==========================================
+        # 데이터 정렬 옵션 (핑크색 '(선택)' + 물음표 아이콘)
         self.sort_header_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.sort_header_frame.pack(fill="x", padx=20, pady=(0, 4))
 
@@ -685,27 +731,25 @@ class ReportMergerApp(ctk.CTk):
         )
         self.sort_title_label.pack(side="left")
 
-        # 핑크색 (선택) 텍스트
         self.sort_opt_badge = ctk.CTkLabel(
             self.sort_header_frame,
             text="(선택)",
             font=ctk.CTkFont(family=APP_FONT, size=11, weight="bold"),
-            text_color="#F04452"  # Apple/Toss 핑크/코랄 컬러
+            text_color="#F04452"
         )
-        self.sort_opt_badge.pack(side="left", padx=(6, 0))
+        self.sort_opt_badge.pack(side="left", padx=(5, 0))
 
-        # 원형 물음표(?) 아이콘
         self.sort_tooltip_btn = ctk.CTkLabel(
             self.sort_header_frame,
             text="?",
-            width=18,
-            height=18,
-            corner_radius=9,
+            width=14,
+            height=14,
+            corner_radius=7,
             fg_color="#E5E8EB",
             text_color="#6B7280",
-            font=ctk.CTkFont(family=APP_FONT, size=11, weight="bold")
+            font=ctk.CTkFont(family=APP_FONT, size=9, weight="bold")
         )
-        self.sort_tooltip_btn.pack(side="left", padx=(6, 0))
+        self.sort_tooltip_btn.pack(side="left", padx=(5, 0))
 
         sort_tip_text = "선택 사항입니다. 미선택 시 별도의 정렬은 진행되지 않습니다."
         ToolTip(self.sort_tooltip_btn, sort_tip_text, APP_FONT)
@@ -730,14 +774,15 @@ class ReportMergerApp(ctk.CTk):
         )
         self.sort_col_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        self.sort_order_menu = ctk.CTkOptionMenu(
+        # 커스텀 꺾쇠(Chevron)가 적용된 ModernOptionMenu 사용
+        self.sort_order_menu = ModernOptionMenu(
             self.sort_frame,
             values=["정렬 안 함", "오름차순 (1→9, A→Z)", "내림차순 (9→1, Z→A)"],
             font=ctk.CTkFont(family=APP_FONT, size=11),
             dropdown_font=ctk.CTkFont(family=APP_FONT, size=11),
             fg_color="#F2F4F6",
-            button_color="#E5E8EB",
-            button_hover_color="#D2D6DB",
+            button_color="#F2F4F6",
+            button_hover_color="#E5E8EB",
             text_color="#333D4B",
             dropdown_fg_color="#FFFFFF",
             dropdown_text_color="#191F28",
@@ -748,7 +793,7 @@ class ReportMergerApp(ctk.CTk):
         self.sort_order_menu.set("정렬 안 함")
         self.sort_order_menu.pack(side="right")
 
-        # 실시간 한글 입력 시 표시되는 붉은 경고 라벨
+        # 실시간 한글 감지 붉은 경고 라벨
         self.sort_warn_label = ctk.CTkLabel(
             self.content_card,
             text="",
@@ -816,7 +861,7 @@ class ReportMergerApp(ctk.CTk):
         self.disclaimer_label.pack(padx=18, pady=(0, 14))
 
     def _on_sort_text_change(self, *args):
-        """정렬 입력창 텍스트 변경 감지 -> 한글 입력 시 실시간 붉은 경고 표시"""
+        """한글 입력 실시간 감지 -> 붉은 경고 표시"""
         val = self.sort_col_var.get()
         if has_korean(val):
             self.sort_warn_label.configure(text="영문으로 입력해 주세요")
@@ -827,7 +872,7 @@ class ReportMergerApp(ctk.CTk):
         AboutDialog(self, APP_FONT)
 
     def _setup_drag_and_drop(self):
-        """Tkinter 메인 루프 충돌 방지 안전한 드래그 앤 드롭 연동"""
+        """Tkinter 메인 루프 충돌 방지 안전한 드래그 앤 드롭"""
         try:
             import windnd
 
