@@ -23,6 +23,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 import pandas as pd
 import pyzipper
+from PIL import Image, ImageDraw
 
 # 외관 테마 설정
 ctk.set_appearance_mode("Light")
@@ -65,23 +66,65 @@ def excel_col_to_index(col_str):
 
 
 # ==========================================
-# 3. 애플/토스 스타일 커스텀 꺾쇠(Chevron) OptionMenu
+# 3. 버튼용 벡터 라인 아이콘 생성기 (Pillow)
+# ==========================================
+def create_reload_icon(size=(14, 14), color="#4E5968"):
+    """첫 번째 이미지 양식: 미니멀 원형 회전 화살표 아이콘"""
+    scale = 4
+    s = size[0] * scale
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    w = int(1.7 * scale)
+    m = int(2.4 * scale)
+
+    # 원형 호 (Arc: 15도 ~ 300도 회전)
+    draw.arc([m, m, s - m, s - m], start=15, end=300, fill=color, width=w)
+
+    # 상단 우측 화살표 머리 (오른쪽/아래를 향하는 꺾쇠)
+    tip_x = s - m
+    tip_y = int(4.5 * scale)
+    barb = int(3.2 * scale)
+    draw.line([(tip_x - barb, tip_y - int(1.2 * scale)), (tip_x, tip_y)], fill=color, width=w)
+    draw.line([(tip_x - int(1.2 * scale), tip_y + barb), (tip_x, tip_y)], fill=color, width=w)
+
+    res = img.resize(size, Image.Resampling.LANCZOS)
+    return ctk.CTkImage(light_image=res, dark_image=res, size=size)
+
+
+def create_folder_icon(size=(14, 14), color="#333D4B"):
+    """두 번째 이미지 양식: 미니멀 오픈 폴더 라인 아이콘"""
+    scale = 4
+    s = size[0] * scale
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    w = int(1.7 * scale)
+
+    # 1. 뒷면 폴더 외곽선 (우측 영역)
+    back_rect = [int(4.8 * scale), int(2.5 * scale), int(12.5 * scale), int(12.5 * scale)]
+    draw.rounded_rectangle(back_rect, radius=int(2.2 * scale), outline=color, width=w)
+
+    # 2. 앞면 열린 커버/플랩 외곽선 (좌측 영역)
+    front_rect = [int(1.8 * scale), int(2.2 * scale), int(8.8 * scale), int(12.8 * scale)]
+    # 겹치는 뒷배경 선을 투명하게 지우고 전면 플랩만 정갈하게 표시
+    draw.rounded_rectangle(front_rect, radius=int(2.2 * scale), fill=(242, 244, 246, 255), outline=color, width=w)
+
+    res = img.resize(size, Image.Resampling.LANCZOS)
+    return ctk.CTkImage(light_image=res, dark_image=res, size=size)
+
+
+# ==========================================
+# 4. 애플/토스 스타일 커스텀 꺾쇠 OptionMenu
 # ==========================================
 class ModernOptionMenu(ctk.CTkOptionMenu):
-    """기본 역삼각형을 숨기고 첨부 이미지 스타일의 슬림한 꺾쇠(Chevron)를 렌더링하는 위젯"""
+    """기본 역삼각형을 숨기고 슬림한 꺾쇠(Chevron)를 렌더링하는 위젯"""
     def _draw(self, no_color_updates=False):
         super()._draw(no_color_updates)
         try:
-            # 기본 투박한 역삼각형 숨김 처리
             self._canvas.itemconfigure("dropdown_arrow", state="hidden")
-            
             coords = self._canvas.coords("dropdown_arrow")
             if coords and len(coords) >= 6:
-                # 기본 화살표의 정중앙 좌표 계산
                 cx = (min(coords[0], coords[2], coords[4]) + max(coords[0], coords[2], coords[4])) / 2
                 cy = (min(coords[1], coords[3], coords[5]) + max(coords[1], coords[3], coords[5])) / 2
-                
-                # 미니멀 꺾쇠(Chevron) 좌표 계산 (너비 10px, 높이 6px)
                 w, h = 5, 3
                 chevron_coords = [cx - w, cy - h, cx, cy + h, cx + w, cy - h]
                 
@@ -104,8 +147,6 @@ class ModernOptionMenu(ctk.CTkOptionMenu):
                         tags="custom_chevron"
                     )
                 self._canvas.tag_raise("custom_chevron")
-                
-                # 마우스 호버 및 클릭 이벤트 연동
                 if hasattr(self, "_clicked"):
                     self._canvas.tag_bind("custom_chevron", "<Button-1>", self._clicked)
                 if hasattr(self, "_on_enter"):
@@ -117,7 +158,7 @@ class ModernOptionMenu(ctk.CTkOptionMenu):
 
 
 # ==========================================
-# 4. 툴팁 (Tooltip) 헬퍼 클래스
+# 5. 툴팁 (Tooltip) 헬퍼 클래스
 # ==========================================
 class ToolTip:
     """원형 물음표(?) 호버 시 한 줄로 출력되는 카드형 툴팁"""
@@ -163,7 +204,7 @@ class ToolTip:
 
 
 # ==========================================
-# 5. 디자인 가이드 적용 모달 팝업들
+# 6. 디자인 가이드 적용 모달 팝업들
 # ==========================================
 class AboutDialog(ctk.CTkToplevel):
     """우측 상단 제품 정보 안내 팝업"""
@@ -527,7 +568,7 @@ class CompleteDialog(ctk.CTkToplevel):
 
 
 # ==========================================
-# 6. 메인 애플리케이션
+# 7. 메인 애플리케이션
 # ==========================================
 class ReportMergerApp(ctk.CTk):
     def __init__(self):
@@ -545,6 +586,10 @@ class ReportMergerApp(ctk.CTk):
         self.save_dir_path = str(Path.home() / "Desktop")
         if not os.path.exists(self.save_dir_path):
             self.save_dir_path = str(Path.home())
+
+        # 아이콘 객체 초기화 (14x14px)
+        self.icon_reload = create_reload_icon(size=(14, 14), color="#4E5968")
+        self.icon_folder = create_folder_icon(size=(14, 14), color="#333D4B")
 
         self._init_ui()
         self._setup_drag_and_drop()
@@ -609,15 +654,18 @@ class ReportMergerApp(ctk.CTk):
         )
         self.file_btn.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
+        # [목록 비우기] 버튼 (회전 화살표 아이콘 적용)
         self.clear_btn = ctk.CTkButton(
             self.btn_frame,
-            text="목록 비우기",
+            text=" 목록 비우기",
+            image=self.icon_reload,
+            compound="left",
             font=ctk.CTkFont(family=APP_FONT, size=12),
             fg_color="#F2F4F6",
             hover_color="#E5E8EB",
             text_color="#4E5968",
             corner_radius=10,
-            width=80,
+            width=104,
             height=36,
             command=self.clear_file_list
         )
@@ -662,7 +710,9 @@ class ReportMergerApp(ctk.CTk):
         self.filename_entry.insert(0, "통합_보고서.xlsx")
         self.filename_entry.pack(fill="x", padx=20, pady=(0, 10))
 
-        # 저장 위치 (호버 툴팁 물음표 아이콘)
+        # ==========================================
+        # [섹션] 저장 위치 (호버 툴팁 물음표 아이콘 적용)
+        # ==========================================
         self.path_header_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.path_header_frame.pack(fill="x", padx=20, pady=(0, 4))
 
@@ -705,10 +755,13 @@ class ReportMergerApp(ctk.CTk):
         self.path_entry.insert(0, self.save_dir_path)
         self.path_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
+        # [폴더 변경] 버튼 (오픈 폴더 아이콘 적용)
         self.path_btn = ctk.CTkButton(
             self.path_frame,
-            text="폴더 변경",
-            width=76,
+            text=" 폴더 변경",
+            image=self.icon_folder,
+            compound="left",
+            width=98,
             height=36,
             font=ctk.CTkFont(family=APP_FONT, size=12),
             fg_color="#F2F4F6",
@@ -719,7 +772,9 @@ class ReportMergerApp(ctk.CTk):
         )
         self.path_btn.pack(side="right")
 
-        # 데이터 정렬 옵션 (핑크색 '(선택)' + 물음표 아이콘)
+        # ==========================================
+        # [섹션] 데이터 정렬 옵션 (핑크색 '(선택)' + 물음표 아이콘)
+        # ==========================================
         self.sort_header_frame = ctk.CTkFrame(self.content_card, fg_color="transparent")
         self.sort_header_frame.pack(fill="x", padx=20, pady=(0, 4))
 
@@ -774,7 +829,6 @@ class ReportMergerApp(ctk.CTk):
         )
         self.sort_col_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        # 커스텀 꺾쇠(Chevron)가 적용된 ModernOptionMenu 사용
         self.sort_order_menu = ModernOptionMenu(
             self.sort_frame,
             values=["정렬 안 함", "오름차순 (1→9, A→Z)", "내림차순 (9→1, Z→A)"],
