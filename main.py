@@ -699,7 +699,6 @@ class ReportMergerApp(ctk.CTk):
 
         self.title("엑셀 문서 자동 취합 프로그램")
 
-        # 1) 시작 시 공백 없는 표준 규격(580x810)으로 단번에 중앙 배치 (시작 시 깜빡임/축소 완전 제거)
         init_w, init_h = 580, 810
         sw = self.winfo_screenwidth()
         sh = self.winfo_screenheight()
@@ -724,7 +723,6 @@ class ReportMergerApp(ctk.CTk):
         self._init_ui()
         self._setup_drag_and_drop()
 
-        # 창 크기 변경 감지 바인딩 (간섭 방지 조건부 반응형 줄바꿈)
         self.bind("<Configure>", self._on_window_resize)
 
     def _init_ui(self):
@@ -819,7 +817,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.file_listbox.pack(fill="both", expand=True, padx=20, pady=(0, 10))
 
-        # 박스 정중앙 안내 문구 (마침표 1개 및 9pt 최적화)
+        # 박스 정중앙 안내 문구
         placeholder_text = "위의 추가 버튼을 클릭하거나, 취합할 파일을 이곳으로 드래그 앤 드롭해 주세요."
         self.placeholder_label = tk.Label(
             self.file_listbox,
@@ -1042,7 +1040,7 @@ class ReportMergerApp(ctk.CTk):
         )
         self.run_btn.pack(fill="x", padx=16, pady=(0, 10))
 
-        # 4. 맨 하단 면책 문구 (초기부터 완벽한 가로 너비 지정)
+        # 4. 맨 하단 면책 문구
         disclaimer_text = (
             "본 프로그램은 업무 지원을 목적으로 제공되는 도구입니다. "
             "사용자는 본 프로그램을 자유롭게 수정·사용·배포할 수 있으며, "
@@ -1399,8 +1397,21 @@ class ReportMergerApp(ctk.CTk):
             self.reset_ui()
             self._set_progress(0, "오류 발생")
             err_msg = str(e)
+            err_lower = err_msg.lower()
 
-            if "file is not a zip file" in err_msg.lower() or "badzipfile" in err_msg.lower():
+            # 소프트캠프(SCDSA), 파수(Fasoo) 등 DRM 보안 헤더 및 손상 파일 관련 키워드 감지
+            drm_keywords = [
+                "file is not a zip file",
+                "badzipfile",
+                "scdsa",
+                "expected bof record",
+                "unsupported format, or corrupt file",
+                "package not found",
+                "invalid file or unrecognized format",
+                "bad magic number"
+            ]
+
+            if any(k in err_lower for k in drm_keywords):
                 drm_msg = (
                     "파일을 확인 할 수 없습니다. 아래 내용을 확인해 주세요.\n\n"
                     "- DRM 설정 여부.\n"
